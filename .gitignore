@@ -1,0 +1,77 @@
+# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+/tests
+
+# Next.js
+/.next/
+/out/
+
+# Production
+/build
+
+# Misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local configuration and scratch directories stay private by default.
+# Add an exception only for configuration intended to be shared.
+/.*
+!/.beads/
+!/.dockerignore
+!/.env.example
+!/.eslintrc.json
+!/.gitattributes
+!/.githooks/
+!/.github/
+!/.gitignore
+
+# Keep root documentation limited to shared project documents.
+# Put technical guides in docs/ and historical designs in history/.
+/*.md
+!/README.md
+!/AGENTS.md
+!/CONTRIBUTING.md
+!/CHANGELOG.md
+!/LICENSE.md
+!/SECURITY.md
+!/CODE_OF_CONDUCT.md
+
+# Local env files at any depth
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma
+# Nothing under prisma/migrations/ is ignored. `prisma migrate deploy` runs from
+# the deployed image, so the migration SQL and migration_lock.toml must be
+# committed or production has no migration history to apply.
+
+# IDE
+.idea
+.vscode
+
+# User uploads
+public/uploads
+
+# Local database state
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
