@@ -114,10 +114,15 @@ export async function GET(
       strengths: member.strengths.map((s) => ({
         id: s.id,
         rank: s.rank,
+        personalizedDescription: s.personalizedDescription,
         theme: {
           slug: s.theme.slug,
           name: s.theme.name,
           shortDescription: s.theme.shortDescription,
+          fullDescription: s.theme.fullDescription,
+          blindSpots: s.theme.blindSpots,
+          actionItems: s.theme.actionItems,
+          worksWith: s.theme.worksWith,
           domain: {
             slug: s.theme.domain.slug,
             name: s.theme.domain.name,

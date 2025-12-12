@@ -19,17 +19,9 @@ const domainColors: Record<DomainSlug, string> = {
   strategic: "text-domain-strategic",
 };
 
-const domainBgColors: Record<DomainSlug, string> = {
-  executing: "bg-domain-executing-light",
-  influencing: "bg-domain-influencing-light",
-  relationship: "bg-domain-relationship-light",
-  strategic: "bg-domain-strategic-light",
-};
-
-export interface DomainIconProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface DomainIconProps extends React.SVGAttributes<SVGElement> {
   domain: DomainSlug;
   size?: "sm" | "default" | "lg" | "xl";
-  withBackground?: boolean;
 }
 
 const sizeClasses = {
@@ -39,37 +31,13 @@ const sizeClasses = {
   xl: "h-8 w-8",
 };
 
-const bgSizeClasses = {
-  sm: "p-1.5",
-  default: "p-2",
-  lg: "p-2.5",
-  xl: "p-3",
-};
-
 export function DomainIcon({
   domain,
   size = "default",
-  withBackground = false,
   className,
   ...props
 }: DomainIconProps) {
   const Icon = domainIcons[domain];
-
-  if (withBackground) {
-    return (
-      <div
-        className={cn(
-          "inline-flex items-center justify-center rounded-full",
-          domainBgColors[domain],
-          bgSizeClasses[size],
-          className
-        )}
-        {...props}
-      >
-        <Icon className={cn(sizeClasses[size], domainColors[domain])} />
-      </div>
-    );
-  }
 
   return <Icon className={cn(sizeClasses[size], domainColors[domain], className)} {...props} />;
 }

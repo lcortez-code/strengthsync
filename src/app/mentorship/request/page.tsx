@@ -156,9 +156,7 @@ function MentorshipRequestContent() {
       <div className="max-w-xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
-            <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
-            </div>
+            <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Request Sent!</h2>
             <p className="text-muted-foreground mb-6">
               Your mentorship request has been sent to {mentor?.name}. They&apos;ll
@@ -226,7 +224,7 @@ function MentorshipRequestContent() {
                 <div className="flex items-center gap-4">
                   <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/20">
                     <AvatarImage src={mentor.avatarUrl || undefined} />
-                    <AvatarFallback className="bg-domain-relationship text-white">
+                    <AvatarFallback className="bg-domain-relationship text-white dark:bg-domain-relationship/80">
                       {getInitials(mentor.name)}
                     </AvatarFallback>
                   </Avatar>
@@ -300,7 +298,7 @@ function MentorshipRequestContent() {
                     }
                   }}
                   placeholder="Add custom focus area..."
-                  className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="flex-1 px-3 py-2 text-sm border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   maxLength={50}
                 />
                 <Button
@@ -347,7 +345,7 @@ function MentorshipRequestContent() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Share a bit about yourself and why you'd like to connect with this mentor..."
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
                 maxLength={500}
               />
               <p className="text-xs text-muted-foreground">

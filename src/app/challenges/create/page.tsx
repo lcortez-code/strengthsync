@@ -193,7 +193,7 @@ export default function CreateChallengePage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 {error}
               </div>
@@ -202,7 +202,7 @@ export default function CreateChallengePage() {
             {/* Challenge Type Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium">
-                Challenge Type <span className="text-red-500">*</span>
+                Challenge Type <span className="text-destructive">*</span>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {CHALLENGE_TYPES.map((type) => (
@@ -234,7 +234,7 @@ export default function CreateChallengePage() {
             {/* Name */}
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="name">
-                Challenge Name <span className="text-red-500">*</span>
+                Challenge Name <span className="text-destructive">*</span>
               </label>
               <input
                 id="name"
@@ -242,7 +242,7 @@ export default function CreateChallengePage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Q1 Strengths Bingo"
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 maxLength={100}
               />
             </div>
@@ -257,7 +257,7 @@ export default function CreateChallengePage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe the challenge and how to participate..."
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[80px]"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[80px]"
                 maxLength={500}
               />
             </div>
@@ -266,7 +266,7 @@ export default function CreateChallengePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="startDate">
-                  Start Date <span className="text-red-500">*</span>
+                  Start Date <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -275,13 +275,13 @@ export default function CreateChallengePage() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full pl-10 pr-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="endDate">
-                  End Date <span className="text-red-500">*</span>
+                  End Date <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -291,7 +291,7 @@ export default function CreateChallengePage() {
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     min={startDate}
-                    className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full pl-10 pr-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               </div>

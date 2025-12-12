@@ -5,6 +5,7 @@ import type { NextRequest } from "next/server";
 // Routes that require authentication
 const protectedRoutes = [
   "/dashboard",
+  "/strengths",
   "/team",
   "/directory",
   "/marketplace",
@@ -17,6 +18,8 @@ const protectedRoutes = [
   "/settings",
   "/admin",
   "/notifications",
+  "/partnerships",
+  "/reviews",
 ];
 
 // Routes that should redirect to dashboard if authenticated

@@ -60,27 +60,27 @@ function getUrgencyBadge(urgency: string) {
   switch (urgency) {
     case "URGENT":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
           <AlertCircle className="h-3 w-3" />
           Urgent
         </span>
       );
     case "HIGH":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
           <Clock className="h-3 w-3" />
           High Priority
         </span>
       );
     case "NORMAL":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
           Normal
         </span>
       );
     case "LOW":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
           Low Priority
         </span>
       );
@@ -93,28 +93,28 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "OPEN":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
           <CheckCircle2 className="h-3 w-3" />
           Open
         </span>
       );
     case "IN_PROGRESS":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic bg-domain-strategic-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic bg-domain-strategic-light dark:bg-domain-strategic/20 dark:text-domain-strategic-muted px-2 py-0.5 rounded-full">
           <Clock className="h-3 w-3" />
           In Progress
         </span>
       );
     case "FULFILLED":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-executing bg-domain-executing-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-executing bg-domain-executing-light dark:bg-domain-executing/20 dark:text-domain-executing-muted px-2 py-0.5 rounded-full">
           <CheckCircle2 className="h-3 w-3" />
           Fulfilled
         </span>
       );
     case "CLOSED":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
           Closed
         </span>
       );
@@ -267,7 +267,7 @@ export default function MarketplacePage() {
                   <div className="flex items-start gap-4 mb-4">
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={request.creator.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(request.creator.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -379,11 +379,11 @@ export default function MarketplacePage() {
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
-                <div className="h-12 w-12 rounded-full bg-domain-influencing-light flex items-center justify-center mx-auto mb-3">
-                  <item.icon className="h-6 w-6 text-domain-influencing" />
-                </div>
-                <div className="h-6 w-6 rounded-full bg-domain-influencing text-white text-sm font-bold flex items-center justify-center mx-auto -mt-9 ml-8 mb-3">
-                  {item.step}
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <span className="h-6 w-6 rounded-full bg-domain-influencing text-white text-sm font-bold flex items-center justify-center">
+                    {item.step}
+                  </span>
+                  <item.icon className="h-5 w-5 text-domain-influencing" />
                 </div>
                 <h4 className="font-semibold mb-1">{item.title}</h4>
                 <p className="text-sm text-muted-foreground">{item.description}</p>

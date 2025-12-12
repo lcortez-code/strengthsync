@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const avatarVariants = cva(
-  "relative flex shrink-0 overflow-hidden rounded-full ring-2 ring-background",
+  "relative flex shrink-0 overflow-hidden rounded-full",
   {
     variants: {
       size: {
@@ -30,7 +30,7 @@ const avatarVariants = cva(
     },
     defaultVariants: {
       size: "default",
-      ring: "default",
+      ring: "none",
     },
   }
 );

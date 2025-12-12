@@ -51,9 +51,9 @@ function getRankIcon(rank: number) {
 }
 
 function getRankStyle(rank: number) {
-  if (rank === 1) return "bg-gradient-to-r from-amber-100 to-amber-50 border-amber-200";
-  if (rank === 2) return "bg-gradient-to-r from-slate-100 to-slate-50 border-slate-200";
-  if (rank === 3) return "bg-gradient-to-r from-orange-100 to-orange-50 border-orange-200";
+  if (rank === 1) return "bg-gradient-to-r from-amber-100 to-amber-50 border-amber-200 dark:from-amber-900/30 dark:to-amber-900/10 dark:border-amber-700/50";
+  if (rank === 2) return "bg-gradient-to-r from-slate-100 to-slate-50 border-slate-200 dark:from-slate-800 dark:to-slate-800/50 dark:border-slate-600/50";
+  if (rank === 3) return "bg-gradient-to-r from-orange-100 to-orange-50 border-orange-200 dark:from-orange-900/30 dark:to-orange-900/10 dark:border-orange-700/50";
   return "";
 }
 
@@ -112,9 +112,7 @@ export default function LeaderboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-primary">#{myRank}</span>
-                </div>
+                <span className="text-2xl font-bold text-primary">#{myRank}</span>
                 <div>
                   <p className="font-semibold">Your Ranking</p>
                   <p className="text-sm text-muted-foreground">
@@ -187,10 +185,10 @@ export default function LeaderboardPage() {
                     )}>
                       <AvatarImage src={entry.avatarUrl || undefined} />
                       <AvatarFallback className={cn(
-                        entry.rank === 1 ? "bg-amber-100 text-amber-700" :
-                        entry.rank === 2 ? "bg-slate-100 text-slate-700" :
-                        entry.rank === 3 ? "bg-orange-100 text-orange-700" :
-                        "bg-muted"
+                        entry.rank === 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                        entry.rank === 2 ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                        entry.rank === 3 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
+                        "bg-muted dark:bg-muted/50"
                       )}>
                         {getInitials(entry.name)}
                       </AvatarFallback>
@@ -291,9 +289,7 @@ export default function LeaderboardPage() {
                 key={item.action}
                 className="flex items-center gap-3 p-3 rounded-lg bg-muted/30"
               >
-                <div className={cn("h-10 w-10 rounded-full bg-muted flex items-center justify-center", item.color)}>
-                  <item.icon className="h-5 w-5" />
-                </div>
+                <item.icon className={cn("h-5 w-5", item.color)} />
                 <div>
                   <p className="font-semibold text-sm">{item.points}</p>
                   <p className="text-xs text-muted-foreground">{item.action}</p>

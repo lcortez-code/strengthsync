@@ -9,8 +9,8 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: "shadow-soft",
-        elevated: "shadow-soft-lg",
+        default: "shadow-soft dark:shadow-soft-dark",
+        elevated: "shadow-soft-lg dark:shadow-soft-lg-dark",
         outline: "border-2 shadow-none",
         ghost: "border-transparent shadow-none bg-transparent",
         glass: "glass",
@@ -25,7 +25,7 @@ const cardVariants = cva(
           "border-domain-strategic/20 bg-gradient-to-br from-domain-strategic-light/50 to-white dark:from-domain-strategic/10 dark:to-card",
       },
       interactive: {
-        true: "cursor-pointer hover:-translate-y-1 hover:shadow-soft-lg active:translate-y-0 active:shadow-soft",
+        true: "cursor-pointer hover:-translate-y-1 hover:shadow-soft-lg dark:hover:shadow-soft-lg-dark active:translate-y-0 active:shadow-soft dark:active:shadow-soft-dark",
         false: "",
       },
     },

@@ -89,6 +89,8 @@ const config: Config = {
         "glow-lg": "0 0 40px -10px var(--tw-shadow-color)",
         soft: "0 4px 20px -2px rgba(0, 0, 0, 0.08)",
         "soft-lg": "0 8px 40px -4px rgba(0, 0, 0, 0.12)",
+        "soft-dark": "0 4px 20px -2px rgba(0, 0, 0, 0.3)",
+        "soft-lg-dark": "0 8px 40px -4px rgba(0, 0, 0, 0.4)",
         domain: "0 4px 24px -4px var(--tw-shadow-color)",
       },
       animation: {

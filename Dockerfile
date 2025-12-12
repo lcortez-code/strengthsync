@@ -28,9 +28,8 @@ COPY . .
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
 
-# Build the application
+# Build the application (NODE_ENV is set to production by next build automatically)
 RUN npm run build
 
 # Stage 3: Runner

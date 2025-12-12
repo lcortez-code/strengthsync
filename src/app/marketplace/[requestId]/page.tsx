@@ -19,6 +19,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
 
@@ -78,7 +79,7 @@ function getUrgencyBadge(urgency: string) {
   switch (urgency) {
     case "URGENT":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
           <AlertCircle className="h-3 w-3" />
           Urgent
         </span>
@@ -92,13 +93,13 @@ function getUrgencyBadge(urgency: string) {
       );
     case "NORMAL":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
           Normal
         </span>
       );
     case "LOW":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
           Low Priority
         </span>
       );
@@ -111,28 +112,28 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "OPEN":
       return (
-        <span className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
+        <span className="flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30 px-3 py-1 rounded-full">
           <CheckCircle2 className="h-4 w-4" />
           Open
         </span>
       );
     case "IN_PROGRESS":
       return (
-        <span className="flex items-center gap-1 text-sm font-medium text-domain-strategic bg-domain-strategic-light px-3 py-1 rounded-full">
+        <span className="flex items-center gap-1 text-sm font-medium text-domain-strategic bg-domain-strategic-light dark:bg-domain-strategic/20 dark:text-domain-strategic-muted px-3 py-1 rounded-full">
           <Clock className="h-4 w-4" />
           In Progress
         </span>
       );
     case "FULFILLED":
       return (
-        <span className="flex items-center gap-1 text-sm font-medium text-domain-executing bg-domain-executing-light px-3 py-1 rounded-full">
+        <span className="flex items-center gap-1 text-sm font-medium text-domain-executing bg-domain-executing-light dark:bg-domain-executing/20 dark:text-domain-executing-muted px-3 py-1 rounded-full">
           <CheckCircle2 className="h-4 w-4" />
           Fulfilled
         </span>
       );
     case "CLOSED":
       return (
-        <span className="flex items-center gap-1 text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+        <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
           <XCircle className="h-4 w-4" />
           Closed
         </span>
@@ -154,6 +155,7 @@ export default function RequestDetailPage({
   const [responseMessage, setResponseMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetchRequest();
@@ -264,9 +266,11 @@ export default function RequestDetailPage({
     }
   };
 
-  const handleDeleteRequest = async () => {
-    if (!window.confirm("Are you sure you want to delete this request?")) return;
+  const handleDeleteRequest = () => {
+    setDeleteConfirmOpen(true);
+  };
 
+  const confirmDeleteRequest = async () => {
     try {
       const res = await fetch(`/api/skill-requests/${requestId}`, {
         method: "DELETE",
@@ -370,7 +374,7 @@ export default function RequestDetailPage({
           <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
             <Avatar className="h-12 w-12">
               <AvatarImage src={request.creator.avatarUrl || undefined} />
-              <AvatarFallback className="bg-primary/10 text-primary">
+              <AvatarFallback className="bg-primary text-primary-foreground">
                 {getInitials(request.creator.name)}
               </AvatarFallback>
             </Avatar>
@@ -448,16 +452,16 @@ export default function RequestDetailPage({
                 className={cn(
                   "p-4 rounded-lg border",
                   response.status === "ACCEPTED"
-                    ? "bg-green-50 border-green-200"
+                    ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
                     : response.status === "DECLINED"
-                    ? "bg-gray-50 border-gray-200 opacity-50"
-                    : "bg-white"
+                    ? "bg-muted border-border opacity-50"
+                    : "bg-card"
                 )}
               >
                 <div className="flex items-start gap-4">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={response.responder.avatarUrl || undefined} />
-                    <AvatarFallback className="bg-primary/10 text-primary">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
                       {getInitials(response.responder.name)}
                     </AvatarFallback>
                   </Avatar>
@@ -470,12 +474,12 @@ export default function RequestDetailPage({
                         {response.responder.name}
                       </Link>
                       {response.status === "ACCEPTED" && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">
                           Accepted
                         </span>
                       )}
                       {response.status === "DECLINED" && (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                           Declined
                         </span>
                       )}
@@ -531,7 +535,7 @@ export default function RequestDetailPage({
           <form onSubmit={handleSubmitResponse}>
             <CardContent>
               {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm mb-4">
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm mb-4">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {error}
                 </div>
@@ -540,7 +544,7 @@ export default function RequestDetailPage({
                 value={responseMessage}
                 onChange={(e) => setResponseMessage(e.target.value)}
                 placeholder="Describe how you can help and why you're a good match..."
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
                 maxLength={2000}
               />
               <p className="text-xs text-muted-foreground mt-1">
@@ -580,6 +584,17 @@ export default function RequestDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete Request"
+        description="Are you sure you want to delete this skill request? This action cannot be undone and all responses will be lost."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeleteRequest}
+        variant="danger"
+      />
     </div>
   );
 }

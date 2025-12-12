@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -27,25 +27,62 @@ import {
   Upload,
   Rss,
   UserCog,
+  BarChart3,
+  ClipboardList,
+  Database,
+  Bot,
 } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Feed", href: "/feed", icon: Rss },
-  { name: "Team", href: "/team", icon: Users },
-  { name: "Directory", href: "/directory", icon: Search },
-  { name: "Shoutouts", href: "/shoutouts", icon: MessageSquare },
-  { name: "Marketplace", href: "/marketplace", icon: ShoppingBag },
-  { name: "Mentorship", href: "/mentorship", icon: Heart },
-  { name: "Challenges", href: "/challenges", icon: Gamepad2 },
-  { name: "Cards", href: "/cards", icon: CreditCard },
-  { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
+// Navigation organized by user workflow (CliftonStrengths journey)
+const navigationSections = [
+  {
+    label: null, // Primary item - no section label
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Me",
+    items: [
+      { name: "My Strengths", href: "/strengths", icon: Sparkles },
+      { name: "My Reviews", href: "/reviews", icon: ClipboardList },
+      { name: "My Card", href: "/cards", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Team",
+    items: [
+      { name: "Team Analytics", href: "/team", icon: Users },
+      { name: "Directory", href: "/directory", icon: Search },
+    ],
+  },
+  {
+    label: "Connect",
+    items: [
+      { name: "Feed", href: "/feed", icon: Rss },
+      { name: "Shoutouts", href: "/shoutouts", icon: MessageSquare },
+      { name: "Skill Marketplace", href: "/marketplace", icon: ShoppingBag },
+      { name: "Mentorship", href: "/mentorship", icon: Heart },
+    ],
+  },
+  {
+    label: "Grow",
+    items: [
+      { name: "AI Coach", href: "/chat", icon: Bot },
+      { name: "Challenges", href: "/challenges", icon: Gamepad2 },
+      { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
+    ],
+  },
 ];
 
 const adminNavigation = [
+  { name: "Manager Dashboard", href: "/admin/dashboard", icon: BarChart3 },
+  { name: "Review Cycles", href: "/admin/review-cycles", icon: ClipboardList },
   { name: "Members", href: "/admin/members", icon: UserCog },
   { name: "Upload Strengths", href: "/admin/upload", icon: Upload },
+  { name: "Strength Constants", href: "/admin/constants", icon: Database },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -58,8 +95,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: session } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [userMenuOpen]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,15 +126,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform bg-card border-r border-border/50 transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-64 transform bg-card border-r border-border/50 transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 h-16 px-4 border-b border-border/50">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-domain-executing via-domain-influencing to-domain-strategic flex items-center justify-center">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
+        <div className="flex items-center gap-2 h-16 px-4 border-b border-border/50 flex-shrink-0">
+          <Sparkles className="h-6 w-6 text-primary" />
           <span className="font-display font-bold text-lg">StrengthSync</span>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -92,77 +142,87 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
         </div>
 
-        {/* Organization name */}
-        {session?.user?.organizationName && (
-          <div className="px-4 py-3 border-b border-border/50">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Organization</p>
-            <p className="font-medium text-sm truncate">{session.user.organizationName}</p>
-          </div>
-        )}
-
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-3 overflow-y-auto custom-scrollbar">
+          {navigationSections.map((section) => (
+            <div key={section.label || "primary"}>
+              {/* Section label */}
+              {section.label && (
+                <div className="px-3 pt-4 pb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {section.label}
+                  </span>
+                </div>
+              )}
+
+              {/* Section items */}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-soft dark:shadow-soft-dark"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           {/* Admin section */}
           {isAdmin && (
             <>
-              <div className="pt-4 pb-2">
-                <p className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="px-3 pt-4 pb-2">
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Admin
-                </p>
+                </span>
               </div>
-              {adminNavigation.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-soft"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.name}
-                  </Link>
-                );
-              })}
+              <div className="space-y-1">
+                {adminNavigation.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-soft dark:shadow-soft-dark"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
             </>
           )}
         </nav>
 
         {/* User section */}
-        <div className="p-3 border-t border-border/50">
-          <div className="relative">
+        <div className="p-3 border-t border-border/50 flex-shrink-0">
+          <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted transition-colors"
             >
               <Avatar size="default">
                 <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || ""} />
-                <AvatarFallback>{getInitials(session?.user?.name || "U")}</AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(session?.user?.name || "U")}</AvatarFallback>
               </Avatar>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-medium truncate">{session?.user?.name}</p>
@@ -175,7 +235,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* User dropdown */}
             {userMenuOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 p-1 bg-card border border-border rounded-xl shadow-soft-lg">
+              <div className="absolute bottom-full left-0 right-0 mb-2 p-1 bg-card border border-border rounded-xl shadow-soft-lg dark:shadow-soft-lg-dark">
                 <Link
                   href="/settings/profile"
                   onClick={() => setUserMenuOpen(false)}
@@ -215,6 +275,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* Theme toggle */}
+              <ThemeToggle />
+
               {/* Notifications */}
               <NotificationBell />
 

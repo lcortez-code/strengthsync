@@ -282,7 +282,7 @@ export default function DirectoryPage() {
                     <div className="flex items-start gap-4">
                       <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-primary/10">
                         <AvatarImage src={member.avatarUrl || undefined} />
-                        <AvatarFallback className="bg-primary/10 text-primary">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
                           {getInitials(member.name)}
                         </AvatarFallback>
                       </Avatar>
