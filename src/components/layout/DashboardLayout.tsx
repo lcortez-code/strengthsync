@@ -22,14 +22,16 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   ChevronDown,
   Heart,
   Upload,
+  Rss,
 } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Feed", href: "/feed", icon: Rss },
   { name: "Team", href: "/team", icon: Users },
   { name: "Directory", href: "/directory", icon: Search },
   { name: "Shoutouts", href: "/shoutouts", icon: MessageSquare },
@@ -212,13 +214,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Right side actions */}
             <div className="flex items-center gap-2">
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative" asChild>
-                <Link href="/notifications">
-                  <Bell className="h-5 w-5" />
-                  {/* Notification badge */}
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-domain-influencing rounded-full" />
-                </Link>
-              </Button>
+              <NotificationBell />
 
               {/* Quick shoutout button */}
               <Button variant="influencing" size="sm" asChild>
