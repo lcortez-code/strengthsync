@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
+import { hash } from "bcryptjs";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
-import { apiSuccess, apiListSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
+import { apiSuccess, apiListSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
+import { generateTempPassword } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,5 +118,148 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching members:", error);
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch members");
+  }
+}
+
+const createMemberSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  jobTitle: z.string().optional(),
+  department: z.string().optional(),
+  role: z.enum(["MEMBER", "ADMIN"]).default("MEMBER"),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
+    }
+
+    const organizationId = session.user.organizationId;
+    const userRole = session.user.role;
+
+    if (!organizationId) {
+      return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
+    }
+
+    // Only admins can add members
+    if (userRole !== "OWNER" && userRole !== "ADMIN") {
+      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    }
+
+    // Only owners can create admins
+    const body = await request.json();
+    const validation = createMemberSchema.safeParse(body);
+
+    if (!validation.success) {
+      return apiError(ApiErrorCode.VALIDATION_ERROR, "Invalid input", {
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { email, fullName, jobTitle, department, role } = validation.data;
+    const normalizedEmail = email.toLowerCase();
+
+    // Only owners can add admins
+    if (role === "ADMIN" && userRole !== "OWNER") {
+      return apiError(ApiErrorCode.FORBIDDEN, "Only owners can add admin members");
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: {
+        organizationMemberships: {
+          where: { organizationId },
+        },
+      },
+    });
+
+    if (existingUser) {
+      // User exists - check if already member of this org
+      if (existingUser.organizationMemberships.length > 0) {
+        return apiError(ApiErrorCode.CONFLICT, "This user is already a member of your organization");
+      }
+
+      // Add existing user to organization
+      const membership = await prisma.organizationMember.create({
+        data: {
+          userId: existingUser.id,
+          organizationId,
+          role,
+          status: "ACTIVE",
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              avatarUrl: true,
+              jobTitle: true,
+              department: true,
+            },
+          },
+        },
+      });
+
+      console.log(`[Admin Members] Added existing user ${existingUser.email} to organization`);
+
+      return apiCreated({
+        id: membership.id,
+        userId: membership.user.id,
+        email: membership.user.email,
+        name: membership.user.fullName,
+        role: membership.role,
+        status: membership.status,
+        isNewUser: false,
+      });
+    }
+
+    // Create new user with temp password
+    const tempPassword = generateTempPassword();
+    const passwordHash = await hash(tempPassword, 12);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Create user
+      const user = await tx.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash,
+          fullName,
+          jobTitle: jobTitle || null,
+          department: department || null,
+        },
+      });
+
+      // Create membership
+      const membership = await tx.organizationMember.create({
+        data: {
+          userId: user.id,
+          organizationId,
+          role,
+          status: "ACTIVE",
+        },
+      });
+
+      return { user, membership, tempPassword };
+    });
+
+    console.log(`[Admin Members] Created new user ${normalizedEmail} with temp password`);
+
+    return apiCreated({
+      id: result.membership.id,
+      userId: result.user.id,
+      email: result.user.email,
+      name: result.user.fullName,
+      role: result.membership.role,
+      status: result.membership.status,
+      isNewUser: true,
+      tempPassword: result.tempPassword, // Return temp password so admin can share it
+    });
+  } catch (error) {
+    console.error("Error creating member:", error);
+    return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create member");
   }
 }

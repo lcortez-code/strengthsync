@@ -272,9 +272,7 @@ export default function ChallengePage() {
         <Card className="bg-gradient-to-r from-amber-100 to-amber-50 border-amber-200">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-amber-200 flex items-center justify-center">
-                <PartyPopper className="h-8 w-8 text-amber-600" />
-              </div>
+              <PartyPopper className="h-8 w-8 text-amber-600" />
               <div>
                 <h3 className="text-xl font-bold text-amber-900">BINGO! You Won!</h3>
                 <p className="text-amber-700">
@@ -424,7 +422,7 @@ export default function ChallengePage() {
                         >
                           <Avatar className="h-10 w-10">
                             <AvatarImage src={member.avatarUrl || undefined} />
-                            <AvatarFallback className="bg-muted">
+                            <AvatarFallback className="bg-muted dark:bg-muted/50">
                               {getInitials(member.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -511,7 +509,7 @@ export default function ChallengePage() {
                     </span>
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={participant.avatarUrl || undefined} />
-                      <AvatarFallback>{getInitials(participant.name || "?")}</AvatarFallback>
+                      <AvatarFallback className="bg-muted dark:bg-muted/50">{getInitials(participant.name || "?")}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{participant.name}</p>

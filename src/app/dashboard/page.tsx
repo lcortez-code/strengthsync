@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ThemeBadge } from "@/components/strengths/ThemeBadge";
 import { DomainIcon } from "@/components/strengths/DomainIcon";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
+import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
+import { RecognitionPrompt } from "@/components/notifications/RecognitionPrompt";
 import Link from "next/link";
 import {
   Users,
@@ -66,7 +69,7 @@ const WELCOME_STEPS = [
   {
     title: "Invite Your Team",
     description: "Send invite codes so team members can join",
-    href: "/settings/invites",
+    href: "/settings/organization",
     icon: Users,
     color: "relationship" as const,
     adminOnly: true,
@@ -98,12 +101,31 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+const ONBOARDING_KEY = "strengthsync_onboarding_completed";
+
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
+
+  // Check if we should show onboarding
+  useEffect(() => {
+    const isWelcome = searchParams.get("welcome") === "true";
+    const hasCompletedOnboarding = localStorage.getItem(ONBOARDING_KEY) === "true";
+
+    if (isWelcome && !hasCompletedOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, [searchParams]);
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem(ONBOARDING_KEY, "true");
+    setShowOnboarding(false);
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -165,9 +187,7 @@ export default function DashboardPage() {
                   {loading ? "-" : data?.teamStats.totalMembers || 0}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-domain-relationship-light flex items-center justify-center">
-                <Users className="h-6 w-6 text-domain-relationship" />
-              </div>
+              <Users className="h-6 w-6 text-domain-relationship" />
             </div>
           </CardContent>
         </Card>
@@ -181,9 +201,7 @@ export default function DashboardPage() {
                   {loading ? "-" : data?.teamStats.shoutoutsThisWeek || 0}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-domain-influencing-light flex items-center justify-center">
-                <MessageSquare className="h-6 w-6 text-domain-influencing" />
-              </div>
+              <MessageSquare className="h-6 w-6 text-domain-influencing" />
             </div>
           </CardContent>
         </Card>
@@ -197,9 +215,7 @@ export default function DashboardPage() {
                   {loading ? "-" : `${data?.myStreak || 0} days`}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                <Flame className="h-6 w-6 text-orange-500" />
-              </div>
+              <Flame className="h-6 w-6 text-orange-500" />
             </div>
           </CardContent>
         </Card>
@@ -213,9 +229,7 @@ export default function DashboardPage() {
                   {loading ? "-" : (data?.myPoints || 0).toLocaleString()}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-amber-500" />
-              </div>
+              <Trophy className="h-6 w-6 text-amber-500" />
             </div>
           </CardContent>
         </Card>
@@ -254,16 +268,14 @@ export default function DashboardPage() {
                       <span className="text-2xl font-bold text-muted-foreground mb-2">
                         #{strength.rank}
                       </span>
-                      <DomainIcon domain={strength.domain} size="lg" withBackground />
+                      <DomainIcon domain={strength.domain} size="lg" />
                       <span className="font-medium text-sm mt-2">{strength.themeName}</span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                    <Target className="h-8 w-8 text-muted-foreground" />
-                  </div>
+                  <Target className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
                   <h4 className="font-medium">No Strengths Yet</h4>
                   <p className="text-sm text-muted-foreground mt-1">
                     Ask your admin to upload your CliftonStrengths report
@@ -299,7 +311,7 @@ export default function DashboardPage() {
                       className="flex items-start gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                     >
                       <Avatar>
-                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing">
+                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
                           {getInitials(shoutout.giver.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -328,9 +340,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                    <MessageSquare className="h-8 w-8 text-muted-foreground" />
-                  </div>
+                  <MessageSquare className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
                   <h4 className="font-medium">No Shoutouts Yet</h4>
                   <p className="text-sm text-muted-foreground mt-1">
                     Be the first to recognize a teammate!
@@ -367,7 +377,7 @@ export default function DashboardPage() {
                       className="h-full p-4"
                     >
                       <div className="flex items-start gap-3">
-                        <DomainIcon domain={step.color} size="lg" withBackground />
+                        <DomainIcon domain={step.color} size="lg" />
                         <div className="flex-1">
                           <h3 className="font-semibold text-sm">{step.title}</h3>
                           <p className="text-xs text-muted-foreground mt-1">
@@ -386,6 +396,9 @@ export default function DashboardPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* AI Recognition Suggestions */}
+          <RecognitionPrompt />
+
           {/* Suggested Partner */}
           <Card>
             <CardHeader>
@@ -402,7 +415,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-domain-relationship-light/50 to-domain-strategic-light/50">
                     <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/30">
-                      <AvatarFallback className="text-lg bg-domain-relationship-light text-domain-relationship">
+                      <AvatarFallback className="text-lg bg-domain-relationship-light text-domain-relationship dark:bg-domain-relationship/20 dark:text-domain-relationship-muted">
                         {getInitials(data.suggestedPartner.memberName)}
                       </AvatarFallback>
                     </Avatar>
@@ -427,9 +440,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-center py-6">
-                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-                    <Handshake className="h-6 w-6 text-muted-foreground" />
-                  </div>
+                  <Handshake className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
                   <p className="text-sm text-muted-foreground">
                     Upload more strengths to see suggestions
                   </p>
@@ -485,7 +496,7 @@ export default function DashboardPage() {
                 { domain: "strategic" as const, name: "Strategic", desc: "Better decisions" },
               ].map((d) => (
                 <div key={d.domain} className="flex items-center gap-3">
-                  <DomainIcon domain={d.domain} size="default" withBackground />
+                  <DomainIcon domain={d.domain} size="default" />
                   <div>
                     <p className="text-sm font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground">{d.desc}</p>
@@ -496,6 +507,13 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
+        onComplete={handleOnboardingComplete}
+      />
     </div>
   );
 }

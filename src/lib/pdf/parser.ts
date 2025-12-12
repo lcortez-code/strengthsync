@@ -1,5 +1,5 @@
 import pdfParse from "pdf-parse";
-import { ALL_THEME_NAMES, THEMES, getDomainForTheme } from "@/constants/strengths-data";
+import { ALL_THEME_NAMES, THEMES, DOMAINS, getDomainForTheme } from "@/constants/strengths-data";
 
 export interface ParsedTheme {
   name: string;
@@ -108,16 +108,88 @@ function extractThemes(text: string): ParsedTheme[] {
 
 // Try to extract personalized description for a theme
 function extractDescriptionForTheme(text: string, themeName: string, startIndex: number): string | undefined {
-  // Look for text following the theme name (up to the next theme or ~500 chars)
-  const afterTheme = text.substring(startIndex + themeName.length, startIndex + themeName.length + 800);
+  // Look for text following the theme name (up to 1500 chars to capture full description)
+  const afterTheme = text.substring(startIndex + themeName.length, startIndex + themeName.length + 1500);
 
-  // Find the first meaningful paragraph after the theme name
-  const paragraphMatch = afterTheme.match(/[\n\r]+([A-Z][^.!?]*[.!?](?:[^.!?]*[.!?]){0,3})/);
+  // Find where the next theme starts (pattern: number followed by period and theme name, or just theme name)
+  // Examples: "2. Relator", "3. Futuristic ®", or just a standalone theme name at line start
+  const nextThemePatterns = [
+    /\n\s*\d+\.\s*[A-Z][a-z]+\s*®?/,  // "2. Relator ®" pattern
+    /\n\s*[A-Z][a-z]+\s*®?\s*\n/,      // Theme name on its own line
+  ];
 
-  if (paragraphMatch && paragraphMatch[1]) {
-    const description = paragraphMatch[1].trim();
+  let nextThemeIndex = afterTheme.length;
+  for (const pattern of nextThemePatterns) {
+    const match = afterTheme.match(pattern);
+    if (match && match.index !== undefined && match.index < nextThemeIndex) {
+      // Verify this is actually a theme name
+      const potentialTheme = match[0].replace(/[\d.\s®\n]/g, '').trim();
+      if (findTheme(potentialTheme)) {
+        nextThemeIndex = match.index;
+      }
+    }
+  }
+
+  // Also check for any theme name that appears - cut off before it
+  const themeNames = ALL_THEME_NAMES.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const anyThemePattern = new RegExp(`\\n\\s*\\d+\\.\\s*(${themeNames.join("|")})\\s*®?`, "i");
+  const anyThemeMatch = afterTheme.match(anyThemePattern);
+  if (anyThemeMatch && anyThemeMatch.index !== undefined && anyThemeMatch.index < nextThemeIndex) {
+    nextThemeIndex = anyThemeMatch.index;
+  }
+
+  // Stop at document footer/legend sections (domain descriptions at bottom of page)
+  // Build domain patterns dynamically from constants to handle future changes
+  const domainPatterns = DOMAINS.map(domain => {
+    const escapedName = domain.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\n\\s*${escapedName}\\s+themes\\s+help`, "i");
+  });
+
+  const staticFooterPatterns = [
+    /\n\s*CliftonStrengths\s*®?\s*(Top|for|34|Results)/i,
+    /\n\s*Copyright\s+/i,
+    /\n\s*Gallup\s*,?\s*Inc/i,
+    /\n\s*This\s+report\s+presents/i,
+    /\n\s*All\s+\d+\s+of\s+your\s+CliftonStrengths/i,
+    /\n\s*Learn\s+more\s+about/i,
+  ];
+
+  const footerPatterns = [...domainPatterns, ...staticFooterPatterns];
+
+  for (const pattern of footerPatterns) {
+    const match = afterTheme.match(pattern);
+    if (match && match.index !== undefined && match.index < nextThemeIndex) {
+      nextThemeIndex = match.index;
+    }
+  }
+
+  // Extract only the text before the next theme or footer
+  const relevantText = afterTheme.substring(0, nextThemeIndex);
+
+  // Find the personalized description - usually after the generic theme description
+  // Look for patterns like "You..." which typically start personalized insights
+  const personalizedMatch = relevantText.match(/[\n\r]+\s*(You[^.!?]*[.!?](?:\s*[^.!?]*[.!?]){0,4})/);
+
+  if (personalizedMatch && personalizedMatch[1]) {
+    let description = personalizedMatch[1].trim();
+
+    // Clean up any trailing theme references that might have slipped through
+    // Remove patterns like "2. Relator ®" or "3. Futuristic" at the end
+    description = description.replace(/\s*\d+\.\s*[A-Z][a-z]+\s*®?\s*$/, '').trim();
+
+    // Also remove if it ends with just a theme name
+    for (const name of ALL_THEME_NAMES) {
+      const endPattern = new RegExp(`\\s*\\d*\\.?\\s*${name}\\s*®?\\s*$`, 'i');
+      description = description.replace(endPattern, '').trim();
+    }
+
+    // Remove any footer text that might have slipped through (using domain names from constants)
+    const domainNamesPattern = DOMAINS.map(d => d.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    description = description.replace(new RegExp(`\\s*(${domainNamesPattern})\\s+themes\\s+help.*$`, 'is'), '').trim();
+    description = description.replace(new RegExp('\\s*CliftonStrengths\\s*®?.*$', 'is'), '').trim();
+
     // Only return if it looks like a real description
-    if (description.length > 50 && description.length < 500 && !findTheme(description.split(" ")[0])) {
+    if (description.length > 30 && description.length < 600) {
       return description;
     }
   }

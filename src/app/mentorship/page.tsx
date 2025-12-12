@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import { DomainIcon } from "@/components/strengths/DomainIcon";
@@ -18,6 +18,15 @@ import {
   Clock,
   UserPlus,
   Target,
+  Brain,
+  Loader2,
+  Lightbulb,
+  MessageSquare,
+  ListTodo,
+  Flag,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
@@ -57,6 +66,39 @@ interface Mentorship {
   isMentor: boolean;
 }
 
+interface MentorshipGuide {
+  overview: string;
+  focusAreas: {
+    area: string;
+    description: string;
+    mentorStrength: string;
+    menteeGoal: string;
+  }[];
+  discussionTopics: {
+    topic: string;
+    questions: string[];
+    expectedOutcome: string;
+  }[];
+  activities: {
+    name: string;
+    description: string;
+    duration: string;
+    strengthsConnection: string;
+  }[];
+  checkpoints: {
+    milestone: string;
+    timeframe: string;
+    indicators: string[];
+  }[];
+  watchOuts: string[];
+}
+
+interface AIGuideState {
+  loading: boolean;
+  error: string | null;
+  guide: MentorshipGuide | null;
+}
+
 function getInitials(name: string): string {
   return name
     .split(" ")
@@ -85,6 +127,244 @@ function getStatusBadge(status: string) {
     default:
       return null;
   }
+}
+
+// AI Mentorship Guide Panel component
+function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
+  const [expanded, setExpanded] = useState(false);
+  const [aiGuide, setAiGuide] = useState<AIGuideState>({
+    loading: false,
+    error: null,
+    guide: null,
+  });
+
+  const fetchGuide = useCallback(async () => {
+    if (aiGuide.guide || aiGuide.loading) return;
+
+    setAiGuide((prev) => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const response = await fetch("/api/ai/mentorship-guide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mentorId: mentorship.mentor.id,
+          menteeId: mentorship.mentee.id,
+          focusThemes: mentorship.focusAreas,
+          duration: "medium",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || "Failed to generate guide");
+      }
+
+      setAiGuide({
+        loading: false,
+        error: null,
+        guide: data.data.guide,
+      });
+    } catch (error) {
+      setAiGuide({
+        loading: false,
+        error: error instanceof Error ? error.message : "Failed to load AI guide",
+        guide: null,
+      });
+    }
+  }, [mentorship.mentor.id, mentorship.mentee.id, mentorship.focusAreas, aiGuide.guide, aiGuide.loading]);
+
+  const handleToggle = () => {
+    if (!expanded && !aiGuide.guide && !aiGuide.loading) {
+      fetchGuide();
+    }
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleToggle}
+        className="w-full justify-between"
+      >
+        <span className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-domain-strategic" />
+          AI Mentorship Guide
+        </span>
+        {aiGuide.loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : expanded ? (
+          <ChevronUp className="h-4 w-4" />
+        ) : (
+          <ChevronDown className="h-4 w-4" />
+        )}
+      </Button>
+
+      {expanded && (
+        <div className="mt-4 space-y-4">
+          {aiGuide.loading && (
+            <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Generating personalized mentorship guide...</span>
+            </div>
+          )}
+
+          {aiGuide.error && (
+            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+              <div className="flex items-center gap-2 text-destructive mb-2">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium">Error</span>
+              </div>
+              <p className="text-sm text-destructive/80">{aiGuide.error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAiGuide({ loading: false, error: null, guide: null });
+                  fetchGuide();
+                }}
+                className="mt-2"
+              >
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {aiGuide.guide && (
+            <div className="space-y-6">
+              {/* Overview */}
+              <div className="p-4 rounded-lg bg-domain-strategic-light/30 border border-domain-strategic/20">
+                <div className="flex items-center gap-2 text-domain-strategic font-medium mb-2">
+                  <Lightbulb className="h-4 w-4" />
+                  Overview
+                </div>
+                <p className="text-sm text-muted-foreground">{aiGuide.guide.overview}</p>
+              </div>
+
+              {/* Focus Areas */}
+              {aiGuide.guide.focusAreas.length > 0 && (
+                <div>
+                  <h4 className="font-medium flex items-center gap-2 mb-3">
+                    <Target className="h-4 w-4 text-domain-executing" />
+                    Focus Areas
+                  </h4>
+                  <div className="grid gap-3">
+                    {aiGuide.guide.focusAreas.map((area, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-muted/50 border">
+                        <div className="font-medium text-sm mb-1">{area.area}</div>
+                        <p className="text-xs text-muted-foreground mb-2">{area.description}</p>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="bg-domain-executing-light text-domain-executing px-2 py-0.5 rounded">
+                            Mentor: {area.mentorStrength}
+                          </span>
+                          <span className="bg-domain-relationship-light text-domain-relationship px-2 py-0.5 rounded">
+                            Goal: {area.menteeGoal}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Discussion Topics */}
+              {aiGuide.guide.discussionTopics.length > 0 && (
+                <div>
+                  <h4 className="font-medium flex items-center gap-2 mb-3">
+                    <MessageSquare className="h-4 w-4 text-domain-influencing" />
+                    Discussion Topics
+                  </h4>
+                  <div className="space-y-3">
+                    {aiGuide.guide.discussionTopics.slice(0, 4).map((topic, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-muted/50 border">
+                        <div className="font-medium text-sm mb-2">{topic.topic}</div>
+                        <ul className="text-xs text-muted-foreground space-y-1 mb-2">
+                          {topic.questions.map((q, j) => (
+                            <li key={j} className="flex items-start gap-1">
+                              <span className="text-domain-influencing">•</span> {q}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-domain-strategic italic">
+                          Expected: {topic.expectedOutcome}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Activities */}
+              {aiGuide.guide.activities.length > 0 && (
+                <div>
+                  <h4 className="font-medium flex items-center gap-2 mb-3">
+                    <ListTodo className="h-4 w-4 text-domain-relationship" />
+                    Suggested Activities
+                  </h4>
+                  <div className="grid gap-2">
+                    {aiGuide.guide.activities.map((activity, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-muted/50 border">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-medium text-sm">{activity.name}</span>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            {activity.duration}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{activity.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Checkpoints */}
+              {aiGuide.guide.checkpoints.length > 0 && (
+                <div>
+                  <h4 className="font-medium flex items-center gap-2 mb-3">
+                    <Flag className="h-4 w-4 text-domain-strategic" />
+                    Progress Checkpoints
+                  </h4>
+                  <div className="space-y-2">
+                    {aiGuide.guide.checkpoints.map((checkpoint, i) => (
+                      <div key={i} className="flex items-start gap-3 p-2 rounded bg-muted/30">
+                        <div className="h-6 w-6 rounded-full bg-domain-strategic text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          {i + 1}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">{checkpoint.milestone}</div>
+                          <div className="text-xs text-muted-foreground">{checkpoint.timeframe}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Watch Outs */}
+              {aiGuide.guide.watchOuts.length > 0 && (
+                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium mb-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Watch Out For
+                  </div>
+                  <ul className="space-y-1">
+                    {aiGuide.guide.watchOuts.map((item, i) => (
+                      <li key={i} className="text-sm text-amber-700 dark:text-amber-400 flex items-start gap-1">
+                        <span>•</span> {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MentorshipPage() {
@@ -168,7 +448,7 @@ export default function MentorshipPage() {
                     <div className="flex items-start gap-4">
                       <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/20">
                         <AvatarImage src={otherPerson.avatarUrl || undefined} />
-                        <AvatarFallback className="bg-domain-relationship-light text-domain-relationship">
+                        <AvatarFallback className="bg-domain-relationship-light text-domain-relationship dark:bg-domain-relationship/20 dark:text-domain-relationship-muted">
                           {getInitials(otherPerson.name || "?")}
                         </AvatarFallback>
                       </Avatar>
@@ -215,6 +495,11 @@ export default function MentorshipPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* AI Guide Panel for active mentorships */}
+                    {mentorship.status === "ACTIVE" && (
+                      <MentorshipGuidePanel mentorship={mentorship} />
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -263,7 +548,7 @@ export default function MentorshipPage() {
                   <div className="flex items-start gap-4 mb-4">
                     <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-primary/10">
                       <AvatarImage src={suggestion.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(suggestion.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -382,11 +667,11 @@ export default function MentorshipPage() {
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
-                <div className="h-12 w-12 rounded-full bg-domain-relationship-light flex items-center justify-center mx-auto mb-3">
-                  <item.icon className="h-6 w-6 text-domain-relationship" />
-                </div>
-                <div className="h-6 w-6 rounded-full bg-domain-relationship text-white text-sm font-bold flex items-center justify-center mx-auto -mt-9 ml-8 mb-3">
-                  {item.step}
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <span className="h-6 w-6 rounded-full bg-domain-relationship text-white text-sm font-bold flex items-center justify-center">
+                    {item.step}
+                  </span>
+                  <item.icon className="h-5 w-5 text-domain-relationship" />
                 </div>
                 <h4 className="font-semibold mb-1">{item.title}</h4>
                 <p className="text-sm text-muted-foreground">{item.description}</p>

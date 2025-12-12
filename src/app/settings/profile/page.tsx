@@ -10,10 +10,14 @@ import {
   Settings,
   User,
   Building2,
+  Bell,
   Save,
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
+  Check,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +59,11 @@ export default function ProfileSettingsPage() {
   const [linkedInUrl, setLinkedInUrl] = useState("");
   const [pronouns, setPronouns] = useState("");
 
+  // AI Bio generation state
+  const [generating, setGenerating] = useState(false);
+  const [generatedBio, setGeneratedBio] = useState<string | null>(null);
+  const [showGenerated, setShowGenerated] = useState(false);
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -79,6 +88,51 @@ export default function ProfileSettingsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // AI Bio generation handler
+  const handleGenerateBio = async () => {
+    setGenerating(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/ai/generate-bio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tone: "professional",
+          includeStrengths: true,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error?.message || "Failed to generate bio");
+        return;
+      }
+
+      setGeneratedBio(result.data.bio);
+      setShowGenerated(true);
+    } catch (err) {
+      console.error("AI bio generation error:", err);
+      setError("Failed to generate bio. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Accept generated bio
+  const acceptGeneratedBio = () => {
+    if (generatedBio) setBio(generatedBio);
+    setGeneratedBio(null);
+    setShowGenerated(false);
+  };
+
+  // Reject generated bio
+  const rejectGeneratedBio = () => {
+    setGeneratedBio(null);
+    setShowGenerated(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,21 +189,28 @@ export default function ProfileSettingsPage() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <Link
           href="/settings/profile"
           className={cn(
-            "flex items-center gap-2 px-4 py-2 border-b-2 -mb-px transition-colors",
+            "flex items-center gap-2 px-4 py-2 border-b-2 -mb-px transition-colors whitespace-nowrap",
             "border-primary text-primary"
           )}
         >
           <User className="h-4 w-4" />
           Profile
         </Link>
+        <Link
+          href="/settings/notifications"
+          className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+        >
+          <Bell className="h-4 w-4" />
+          Notifications
+        </Link>
         {isAdmin && (
           <Link
             href="/settings/organization"
-            className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
           >
             <Building2 className="h-4 w-4" />
             Organization
@@ -182,14 +243,14 @@ export default function ProfileSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 text-green-600 rounded-lg text-sm">
+                <div className="flex items-center gap-2 p-3 bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 rounded-lg text-sm">
                   <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
                   Changes saved successfully!
                 </div>
@@ -199,7 +260,7 @@ export default function ProfileSettingsPage() {
               <div className="flex items-center gap-6">
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={profile?.avatarUrl || undefined} />
-                  <AvatarFallback className="text-xl bg-primary/10 text-primary">
+                  <AvatarFallback className="text-xl bg-primary text-primary-foreground">
                     {getInitials(fullName || "U")}
                   </AvatarFallback>
                 </Avatar>
@@ -215,14 +276,14 @@ export default function ProfileSettingsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="fullName">
-                    Full Name <span className="text-red-500">*</span>
+                    Full Name <span className="text-destructive">*</span>
                   </label>
                   <input
                     id="fullName"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     required
                     minLength={2}
                   />
@@ -238,7 +299,7 @@ export default function ProfileSettingsPage() {
                     value={pronouns}
                     onChange={(e) => setPronouns(e.target.value)}
                     placeholder="e.g., they/them, she/her, he/him"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
 
@@ -252,7 +313,7 @@ export default function ProfileSettingsPage() {
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
                     placeholder="e.g., Software Engineer"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
 
@@ -266,7 +327,7 @@ export default function ProfileSettingsPage() {
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
                     placeholder="e.g., Engineering"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
 
@@ -280,7 +341,7 @@ export default function ProfileSettingsPage() {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g., San Francisco, CA"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
 
@@ -294,7 +355,7 @@ export default function ProfileSettingsPage() {
                     value={linkedInUrl}
                     onChange={(e) => setLinkedInUrl(e.target.value)}
                     placeholder="https://linkedin.com/in/username"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
               </div>
@@ -308,12 +369,70 @@ export default function ProfileSettingsPage() {
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Tell your team a bit about yourself..."
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
+                  className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
                   maxLength={500}
                 />
-                <p className="text-xs text-muted-foreground">
-                  {bio.length}/500 characters
-                </p>
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-muted-foreground">
+                    {bio.length}/500 characters
+                  </p>
+                  {/* AI Generate Bio Button */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGenerateBio}
+                    disabled={generating}
+                    className="text-xs gap-1.5 text-domain-strategic hover:text-domain-strategic hover:bg-domain-strategic/10"
+                  >
+                    {generating ? (
+                      <>
+                        <div className="h-3 w-3 border-2 border-domain-strategic border-t-transparent rounded-full animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3 w-3" />
+                        Generate with AI
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* AI Generated Bio Panel */}
+                {showGenerated && generatedBio && (
+                  <div className="p-4 rounded-xl bg-domain-strategic/10 border border-domain-strategic/30 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-domain-strategic">
+                      <Sparkles className="h-4 w-4" />
+                      AI-Generated Bio
+                    </div>
+                    <p className="text-sm leading-relaxed bg-background/50 p-3 rounded-lg">
+                      {generatedBio}
+                    </p>
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={rejectGeneratedBio}
+                        className="text-xs"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Discard
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        onClick={acceptGeneratedBio}
+                        className="text-xs bg-domain-strategic hover:bg-domain-strategic/90"
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Use This Bio
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
             <CardFooter>

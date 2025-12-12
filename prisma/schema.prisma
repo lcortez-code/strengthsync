@@ -69,6 +69,7 @@ model Organization {
   challenges    TeamChallenge[]
   shoutouts     Shoutout[]
   feedItems     FeedItem[]
+  reviewCycles  ReviewCycle[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -142,6 +143,13 @@ model OrganizationMember {
   reactions                Reaction[]
   comments                 Comment[]
   challengeParticipations  ChallengeParticipant[]
+
+  // Performance reviews
+  reviewsAsSubject         PerformanceReview[]     @relation("ReviewSubject")
+  reviewsAsConductor       PerformanceReview[]     @relation("ReviewConductor")
+
+  // AI features
+  aiConversations          AIConversation[]
 
   joinedAt  DateTime @default(now())
   createdAt DateTime @default(now())
@@ -566,6 +574,236 @@ enum NotificationType {
 }
 
 // ============================================================================
+// EMAIL TRACKING
+// ============================================================================
+
+model EmailDigestLog {
+  id     String @id @default(cuid())
+  userId String
+
+  digestType  DigestType
+  periodStart DateTime   // Start of the period covered
+  periodEnd   DateTime   // End of the period covered
+
+  // Summary of what was included
+  shoutoutsGiven    Int @default(0)
+  shoutoutsReceived Int @default(0)
+  pointsEarned      Int @default(0)
+  badgesEarned      Int @default(0)
+  challengesActive  Int @default(0)
+
+  // Delivery status
+  status    EmailStatus @default(PENDING)
+  messageId String?     // Resend message ID
+  error     String?
+
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("email_digest_logs")
+}
+
+enum DigestType {
+  WEEKLY
+  MONTHLY
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+}
+
+// ============================================================================
+// PERFORMANCE REVIEWS
+// ============================================================================
+
+model ReviewCycle {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name        String           // e.g., "Q4 2024 Review", "Annual 2024"
+  description String?          @db.Text
+  cycleType   ReviewCycleType
+
+  startsAt  DateTime
+  endsAt    DateTime
+  status    ReviewCycleStatus @default(DRAFT)
+
+  // Configuration
+  includeSelfAssessment   Boolean @default(true)
+  includeManagerReview    Boolean @default(true)
+  includePeerFeedback     Boolean @default(false)
+  includeStrengthsContext Boolean @default(true) // Show strengths in review forms
+
+  reviews PerformanceReview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@map("review_cycles")
+}
+
+enum ReviewCycleType {
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  PROJECT
+  PROBATION
+}
+
+enum ReviewCycleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model PerformanceReview {
+  id      String             @id @default(cuid())
+  cycleId String
+  cycle   ReviewCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  memberId String
+  member   OrganizationMember @relation("ReviewSubject", fields: [memberId], references: [id], onDelete: Cascade)
+
+  // Optional: Manager conducting the review
+  reviewerId String?
+  reviewer   OrganizationMember? @relation("ReviewConductor", fields: [reviewerId], references: [id])
+
+  status ReviewStatus @default(NOT_STARTED)
+
+  // Self-assessment
+  selfAssessment     String? @db.Text
+  selfAssessmentAt   DateTime?
+  strengthsUsed      String[] // Theme names the employee highlighted
+
+  // Manager review
+  managerAssessment  String? @db.Text
+  managerAssessmentAt DateTime?
+  overallRating      ReviewRating?
+
+  // Strengths-based insights (auto-generated)
+  strengthsContext   Json? // Summary of strengths, domain balance, etc.
+
+  goals    ReviewGoal[]
+  evidence ReviewEvidence[]
+
+  submittedAt  DateTime?
+  completedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cycleId, memberId])
+  @@index([memberId, status])
+  @@map("performance_reviews")
+}
+
+enum ReviewStatus {
+  NOT_STARTED
+  SELF_ASSESSMENT
+  MANAGER_REVIEW
+  COMPLETED
+  ACKNOWLEDGED
+}
+
+enum ReviewRating {
+  EXCEEDS_EXPECTATIONS
+  MEETS_EXPECTATIONS
+  DEVELOPING
+  NEEDS_IMPROVEMENT
+}
+
+model ReviewGoal {
+  id       String            @id @default(cuid())
+  reviewId String
+  review   PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?      @db.Text
+  category    GoalCategory @default(PERFORMANCE)
+
+  // Strengths alignment
+  alignedThemes String[] // Theme names this goal aligns with
+  suggestedByAI Boolean  @default(false) // Was this suggested based on strengths?
+
+  // Progress tracking
+  status   GoalStatus @default(NOT_STARTED)
+  progress Int        @default(0) // 0-100
+
+  // Assessment
+  selfRating    GoalRating?
+  managerRating GoalRating?
+  comments      String?     @db.Text
+
+  dueDate   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("review_goals")
+}
+
+enum GoalCategory {
+  PERFORMANCE
+  DEVELOPMENT
+  STRENGTHS_APPLICATION
+  COLLABORATION
+  LEADERSHIP
+}
+
+enum GoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  DEFERRED
+}
+
+enum GoalRating {
+  EXCEEDED
+  MET
+  PARTIALLY_MET
+  NOT_MET
+}
+
+model ReviewEvidence {
+  id       String            @id @default(cuid())
+  reviewId String
+  review   PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  evidenceType EvidenceType
+  title        String
+  description  String?      @db.Text
+  date         DateTime
+
+  // Links to source data
+  shoutoutId     String?
+  skillRequestId String?
+  mentorshipId   String?
+
+  // Which strengths this demonstrates
+  demonstratedThemes String[]
+
+  addedBy   String // Member ID who added this evidence
+  createdAt DateTime @default(now())
+
+  @@map("review_evidence")
+}
+
+enum EvidenceType {
+  SHOUTOUT_RECEIVED
+  SHOUTOUT_GIVEN
+  SKILL_REQUEST_HELPED
+  MENTORSHIP_ACTIVITY
+  CHALLENGE_COMPLETION
+  BADGE_EARNED
+  CUSTOM
+}
+
+// ============================================================================
 // AUDIT LOG
 // ============================================================================
 
@@ -588,4 +826,146 @@ model AuditLog {
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+// ============================================================================
+// AI INTEGRATION
+// ============================================================================
+
+model AIConversation {
+  id             String             @id @default(cuid())
+  memberId       String
+  member         OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  title       String?
+  context     Json      @default("{}") // Context data used in conversation
+  status      AIConversationStatus @default(ACTIVE)
+
+  messages AIMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memberId, createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@map("ai_conversations")
+}
+
+enum AIConversationStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+model AIMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    AIMessageRole
+  content String        @db.Text
+
+  // Token tracking
+  promptTokens     Int @default(0)
+  completionTokens Int @default(0)
+  totalTokens      Int @default(0)
+
+  // Model info
+  model     String?
+  latencyMs Int?
+
+  // Tool calls
+  toolCalls Json? // Array of tool call objects
+  toolResults Json? // Results from tool calls
+
+  // Feedback
+  feedbackRating   Int?     // 1-5 rating
+  feedbackComment  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+model AIPromptTemplate {
+  id String @id @default(cuid())
+
+  name        String @unique // e.g., "shoutout-generator", "coaching-tips"
+  slug        String @unique
+  description String?
+
+  category AIPromptCategory
+
+  // Template content
+  systemPrompt String @db.Text
+  userPrompt   String @db.Text // Template with {{variables}}
+
+  // Configuration
+  model       String  @default("gpt-4o")
+  temperature Float   @default(0.7)
+  maxTokens   Int     @default(1000)
+
+  // Variables this template expects
+  variables String[] // e.g., ["recipientName", "strengths", "context"]
+
+  isActive Boolean @default(true)
+  version  Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_prompt_templates")
+}
+
+enum AIPromptCategory {
+  WRITING_ASSISTANCE
+  INSIGHTS
+  RECOMMENDATIONS
+  CHAT
+  ADMIN
+}
+
+model AIUsageLog {
+  id             String  @id @default(cuid())
+  memberId       String?
+  organizationId String
+
+  feature    String // e.g., "enhance-shoutout", "team-narrative", "chat"
+  endpoint   String // API endpoint called
+
+  // Token usage
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+
+  // Cost calculation (in cents for precision)
+  costCents Int @default(0)
+
+  // Model info
+  model     String
+  latencyMs Int
+
+  // Request/Response (truncated for storage)
+  requestSummary  String? @db.Text
+  responseSummary String? @db.Text
+
+  // Status
+  success Boolean @default(true)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([memberId, createdAt(sort: Desc)])
+  @@index([feature, createdAt])
+  @@map("ai_usage_logs")
 }

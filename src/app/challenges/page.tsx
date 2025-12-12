@@ -225,9 +225,7 @@ export default function ChallengesPage() {
                 >
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`h-12 w-12 rounded-xl bg-${color}-light flex items-center justify-center`}>
-                        <Icon className={`h-6 w-6 text-${color}`} />
-                      </div>
+                      <Icon className={`h-6 w-6 text-${color}`} />
                       {getStatusBadge(challenge.status)}
                     </div>
 
@@ -254,7 +252,7 @@ export default function ChallengesPage() {
                               className="h-7 w-7 border-2 border-background"
                             >
                               <AvatarImage src={p.avatarUrl || undefined} />
-                              <AvatarFallback className="text-xs bg-muted">
+                              <AvatarFallback className="text-xs bg-muted dark:bg-muted/50">
                                 {getInitials(p.name || "?")}
                               </AvatarFallback>
                             </Avatar>
@@ -335,11 +333,9 @@ export default function ChallengesPage() {
             ].map((item) => (
               <div
                 key={item.type}
-                className={`flex items-start gap-3 p-4 rounded-xl bg-domain-${item.color}-light/30 border border-domain-${item.color}/10`}
+                className={`flex items-start gap-3 p-4 rounded-xl border`}
               >
-                <div className={`h-10 w-10 rounded-xl bg-domain-${item.color}-light flex items-center justify-center flex-shrink-0`}>
-                  <item.icon className={`h-5 w-5 text-domain-${item.color}`} />
-                </div>
+                <item.icon className={`h-5 w-5 text-domain-${item.color} flex-shrink-0 mt-0.5`} />
                 <div>
                   <h4 className="font-semibold text-sm">{item.name}</h4>
                   <p className="text-xs text-muted-foreground mt-1">

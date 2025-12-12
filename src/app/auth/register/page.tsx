@@ -17,8 +17,12 @@ export default function RegisterPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    organizationName: "",
+    organizationName: "ISG",
   });
+
+  const ORGANIZATIONS = [
+    { value: "ISG", label: "ISG" },
+  ];
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,7 +92,7 @@ export default function RegisterPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
@@ -107,13 +111,11 @@ export default function RegisterPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-domain-executing via-domain-influencing to-domain-strategic flex items-center justify-center shadow-soft-lg">
-            <Sparkles className="h-6 w-6 text-white" />
-          </div>
+          <Sparkles className="h-8 w-8 text-primary" />
           <span className="font-display font-bold text-2xl">StrengthSync</span>
         </div>
 
-        <Card className="shadow-soft-lg">
+        <Card className="shadow-soft-lg dark:shadow-soft-lg-dark">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Create your account</CardTitle>
             <CardDescription>Start your team&apos;s strengths journey</CardDescription>
@@ -164,18 +166,32 @@ export default function RegisterPage() {
 
               <div className="space-y-2">
                 <label htmlFor="organizationName" className="text-sm font-medium">
-                  Organization Name
+                  Organization
                 </label>
-                <Input
-                  id="organizationName"
-                  name="organizationName"
-                  type="text"
-                  placeholder="Acme Inc."
-                  value={formData.organizationName}
-                  onChange={handleChange}
-                  icon={<Building2 className="h-4 w-4" />}
-                  required
-                />
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                  <select
+                    id="organizationName"
+                    name="organizationName"
+                    value={formData.organizationName}
+                    onChange={handleChange}
+                    className="flex w-full h-11 rounded-xl border border-input bg-background text-foreground pl-10 pr-10 py-2 text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 appearance-none cursor-pointer"
+                    required
+                  >
+                    {ORGANIZATIONS.map((org) => (
+                      <option key={org.value} value={org.value}>
+                        {org.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">

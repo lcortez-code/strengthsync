@@ -9,6 +9,21 @@ import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import { DomainIcon } from "@/components/strengths/DomainIcon";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/Dialog";
+import {
   Users,
   Search,
   RefreshCw,
@@ -23,8 +38,13 @@ import {
   XCircle,
   Clock,
   Loader2,
+  UserPlus,
+  Copy,
+  Check,
   AlertCircle,
+  KeyRound,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
 
@@ -61,14 +81,14 @@ function getRoleBadge(role: string) {
   switch (role) {
     case "OWNER":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
           <ShieldCheck className="h-3 w-3" />
           Owner
         </span>
       );
     case "ADMIN":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-executing bg-domain-executing-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-executing bg-domain-executing-light dark:bg-domain-executing/20 dark:text-domain-executing-muted px-2 py-0.5 rounded-full">
           <Shield className="h-3 w-3" />
           Admin
         </span>
@@ -118,8 +138,53 @@ export default function AdminMembersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [actionMemberId, setActionMemberId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState<{ open: boolean; memberId: string; memberName: string }>({
+    open: false,
+    memberId: "",
+    memberName: "",
+  });
+
+  // Add member modal state
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberForm, setAddMemberForm] = useState({
+    email: "",
+    fullName: "",
+    jobTitle: "",
+    department: "",
+    role: "MEMBER" as "MEMBER" | "ADMIN",
+  });
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [addMemberSuccess, setAddMemberSuccess] = useState<{
+    isNewUser: boolean;
+    tempPassword?: string;
+    email: string;
+    name: string;
+  } | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+
+  // Reset password state
+  const [resetPasswordDialog, setResetPasswordDialog] = useState<{
+    open: boolean;
+    memberId: string;
+    memberName: string;
+    memberEmail: string;
+    memberRole: string;
+  }>({
+    open: false,
+    memberId: "",
+    memberName: "",
+    memberEmail: "",
+    memberRole: "",
+  });
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{
+    tempPassword: string;
+    email: string;
+    name: string;
+  } | null>(null);
+  const [copiedResetPassword, setCopiedResetPassword] = useState(false);
 
   const isOwner = session?.user?.role === "OWNER";
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
@@ -173,7 +238,6 @@ export default function AdminMembersPage() {
       console.error("Failed to update role:", err);
     } finally {
       setProcessing(false);
-      setActionMemberId(null);
     }
   };
 
@@ -193,18 +257,17 @@ export default function AdminMembersPage() {
       console.error("Failed to update status:", err);
     } finally {
       setProcessing(false);
-      setActionMemberId(null);
     }
   };
 
-  const handleRemoveMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`Are you sure you want to remove ${memberName} from the organization?`)) {
-      return;
-    }
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    setRemoveConfirm({ open: true, memberId, memberName });
+  };
 
+  const confirmRemoveMember = async () => {
     setProcessing(true);
     try {
-      const res = await fetch(`/api/admin/members/${memberId}`, {
+      const res = await fetch(`/api/admin/members/${removeConfirm.memberId}`, {
         method: "DELETE",
       });
 
@@ -215,7 +278,6 @@ export default function AdminMembersPage() {
       console.error("Failed to remove member:", err);
     } finally {
       setProcessing(false);
-      setActionMemberId(null);
     }
   };
 
@@ -225,6 +287,115 @@ export default function AdminMembersPage() {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddMemberLoading(true);
+    setAddMemberError(null);
+
+    try {
+      const res = await fetch("/api/admin/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addMemberForm),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setAddMemberError(result.error?.message || "Failed to add member");
+        return;
+      }
+
+      // Show success with credentials if new user
+      setAddMemberSuccess({
+        isNewUser: result.data.isNewUser,
+        tempPassword: result.data.tempPassword,
+        email: result.data.email,
+        name: result.data.name,
+      });
+
+      // Refresh member list
+      fetchMembers();
+    } catch (err) {
+      setAddMemberError("An unexpected error occurred");
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  const resetAddMemberModal = () => {
+    setAddMemberForm({
+      email: "",
+      fullName: "",
+      jobTitle: "",
+      department: "",
+      role: "MEMBER",
+    });
+    setAddMemberError(null);
+    setAddMemberSuccess(null);
+    setCopiedPassword(false);
+  };
+
+  const copyTempPassword = () => {
+    if (addMemberSuccess?.tempPassword) {
+      navigator.clipboard.writeText(addMemberSuccess.tempPassword);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+    }
+  };
+
+  const handleResetPassword = (member: Member) => {
+    setResetPasswordResult(null);
+    setCopiedResetPassword(false);
+    setResetPasswordDialog({
+      open: true,
+      memberId: member.id,
+      memberName: member.name,
+      memberEmail: member.email,
+      memberRole: member.role,
+    });
+  };
+
+  const confirmResetPassword = async () => {
+    setResetPasswordLoading(true);
+    try {
+      const res = await fetch(`/api/admin/members/${resetPasswordDialog.memberId}`, {
+        method: "POST",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        console.error("Failed to reset password:", result.error?.message);
+        return;
+      }
+
+      setResetPasswordResult({
+        tempPassword: result.data.tempPassword,
+        email: result.data.email,
+        name: result.data.name,
+      });
+    } catch (err) {
+      console.error("Failed to reset password:", err);
+    } finally {
+      setResetPasswordLoading(false);
+    }
+  };
+
+  const copyResetPassword = () => {
+    if (resetPasswordResult?.tempPassword) {
+      navigator.clipboard.writeText(resetPasswordResult.tempPassword);
+      setCopiedResetPassword(true);
+      setTimeout(() => setCopiedResetPassword(false), 2000);
+    }
+  };
+
+  const closeResetPasswordDialog = () => {
+    setResetPasswordDialog((prev) => ({ ...prev, open: false }));
+    setResetPasswordResult(null);
+    setCopiedResetPassword(false);
   };
 
   if (!isAdmin) {
@@ -244,15 +415,21 @@ export default function AdminMembersPage() {
             Manage organization members, roles, and access
           </p>
         </div>
-        <Button variant="outline" onClick={fetchMembers}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchMembers}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => { resetAddMemberModal(); setAddMemberOpen(true); }}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Member
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardContent className="py-4">
+        <CardContent className="p-2">
           <div className="flex flex-col md:flex-row gap-4">
             <form onSubmit={handleSearch} className="flex-1 flex gap-2">
               <div className="relative flex-1">
@@ -262,7 +439,7 @@ export default function AdminMembersPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name or email..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <Button type="submit">Search</Button>
@@ -302,24 +479,24 @@ export default function AdminMembersPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b bg-muted/50">
+                  <tr className="border-b border-border">
                     <th className="text-left p-4 font-medium">Member</th>
                     <th className="text-left p-4 font-medium">Role</th>
-                    <th className="text-left p-4 font-medium">Status</th>
-                    <th className="text-left p-4 font-medium">Strengths</th>
-                    <th className="text-left p-4 font-medium">Points</th>
-                    <th className="text-left p-4 font-medium">Joined</th>
+                    <th className="text-left p-4 font-medium hidden sm:table-cell">Status</th>
+                    <th className="text-left p-4 font-medium hidden md:table-cell">Strengths</th>
+                    <th className="text-left p-4 font-medium hidden lg:table-cell">Points</th>
+                    <th className="text-left p-4 font-medium hidden lg:table-cell">Joined</th>
                     <th className="text-right p-4 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {members.map((member) => (
-                    <tr key={member.id} className="border-b hover:bg-muted/30">
+                    <tr key={member.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
+                          <Avatar className="h-10 w-10" ring="none">
                             <AvatarImage src={member.avatarUrl || undefined} />
-                            <AvatarFallback className="bg-primary/10 text-primary">
+                            <AvatarFallback className="bg-primary text-primary-foreground">
                               {getInitials(member.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -337,8 +514,8 @@ export default function AdminMembersPage() {
                         </div>
                       </td>
                       <td className="p-4">{getRoleBadge(member.role)}</td>
-                      <td className="p-4">{getStatusBadge(member.status)}</td>
-                      <td className="p-4">
+                      <td className="p-4 hidden sm:table-cell">{getStatusBadge(member.status)}</td>
+                      <td className="p-4 hidden md:table-cell">
                         {member.hasStrengths ? (
                           <div className="flex gap-1">
                             {member.topStrengths.slice(0, 4).map((s) => (
@@ -355,87 +532,93 @@ export default function AdminMembersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 hidden lg:table-cell">
                         <span className="font-medium">{member.points}</span>
                       </td>
-                      <td className="p-4 text-sm text-muted-foreground">
+                      <td className="p-4 text-sm text-muted-foreground hidden lg:table-cell">
                         {formatDate(member.joinedAt)}
                       </td>
                       <td className="p-4">
                         <div className="flex justify-end">
-                          <div className="relative">
-                            <button
-                              onClick={() =>
-                                setActionMemberId(
-                                  actionMemberId === member.id ? null : member.id
-                                )
-                              }
-                              className="p-2 hover:bg-muted rounded-lg"
-                              disabled={member.id === session?.user?.memberId}
-                            >
+                          {member.id === session?.user?.memberId ? (
+                            <div className="p-2 opacity-50 cursor-not-allowed">
                               <MoreVertical className="h-4 w-4" />
-                            </button>
-
-                            {actionMemberId === member.id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10">
-                                {/* Role options */}
-                                {isOwner && member.role !== "OWNER" && (
-                                  <button
-                                    onClick={() => handleRoleChange(member.id, "ADMIN")}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                    disabled={processing}
-                                  >
-                                    <ChevronUp className="h-4 w-4" />
-                                    {member.role === "ADMIN" ? "Demote to Member" : "Promote to Admin"}
-                                  </button>
-                                )}
-                                {member.role === "ADMIN" && isOwner && (
-                                  <button
-                                    onClick={() => handleRoleChange(member.id, "MEMBER")}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                    disabled={processing}
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                    Demote to Member
-                                  </button>
-                                )}
-
-                                {/* Status options */}
-                                {member.status === "ACTIVE" && (
-                                  <button
-                                    onClick={() => handleStatusChange(member.id, "INACTIVE")}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                    disabled={processing}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                    Deactivate
-                                  </button>
-                                )}
-                                {member.status === "INACTIVE" && (
-                                  <button
-                                    onClick={() => handleStatusChange(member.id, "ACTIVE")}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                    disabled={processing}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Activate
-                                  </button>
-                                )}
-
-                                <hr className="my-1" />
-
-                                {/* Remove */}
-                                <button
-                                  onClick={() => handleRemoveMember(member.id, member.name)}
-                                  className="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                            </div>
+                          ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="p-2 rounded-lg hover:bg-muted cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {/* Role options - only owners can change roles */}
+                              {isOwner && member.role === "MEMBER" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleRoleChange(member.id, "ADMIN")}
                                   disabled={processing}
                                 >
-                                  <UserMinus className="h-4 w-4" />
-                                  Remove from org
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                                  <ChevronUp className="h-4 w-4 mr-2" />
+                                  Promote to Admin
+                                </DropdownMenuItem>
+                              )}
+                              {isOwner && member.role === "ADMIN" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleRoleChange(member.id, "MEMBER")}
+                                  disabled={processing}
+                                >
+                                  <ChevronDown className="h-4 w-4 mr-2" />
+                                  Demote to Member
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* Status options */}
+                              {member.status === "ACTIVE" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(member.id, "INACTIVE")}
+                                  disabled={processing}
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              )}
+                              {member.status === "INACTIVE" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(member.id, "ACTIVE")}
+                                  disabled={processing}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Activate
+                                </DropdownMenuItem>
+                              )}
+
+                              <DropdownMenuSeparator />
+
+                              {/* Reset Password - only if user can manage this member */}
+                              {(isOwner || (member.role !== "OWNER" && member.role !== "ADMIN")) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleResetPassword(member)}
+                                  disabled={processing}
+                                >
+                                  <KeyRound className="h-4 w-4 mr-2" />
+                                  Reset Password
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* Remove */}
+                              <DropdownMenuItem
+                                onClick={() => handleRemoveMember(member.id, member.name)}
+                                disabled={processing}
+                                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                              >
+                                <UserMinus className="h-4 w-4 mr-2" />
+                                Remove from org
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -458,6 +641,304 @@ export default function AdminMembersPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={removeConfirm.open}
+        onOpenChange={(open) => setRemoveConfirm((prev) => ({ ...prev, open }))}
+        title="Remove Member"
+        description={`Are you sure you want to remove ${removeConfirm.memberName} from the organization? This action cannot be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        onConfirm={confirmRemoveMember}
+        variant="danger"
+        isLoading={processing}
+      />
+
+      {/* Add Member Dialog */}
+      <Dialog open={addMemberOpen} onOpenChange={(open) => { if (!open) resetAddMemberModal(); setAddMemberOpen(open); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Team Member</DialogTitle>
+            <DialogDescription>
+              Add a new member to your organization. They&apos;ll receive login credentials.
+            </DialogDescription>
+          </DialogHeader>
+
+          {addMemberSuccess ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium mb-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Member Added Successfully
+                </div>
+                <p className="text-sm text-green-600 dark:text-green-500">
+                  {addMemberSuccess.name} ({addMemberSuccess.email}) has been added to your organization.
+                </p>
+              </div>
+
+              {addMemberSuccess.isNewUser && addMemberSuccess.tempPassword && (
+                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
+                    Temporary Password (share this securely)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded border font-mono text-sm">
+                      {addMemberSuccess.tempPassword}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={copyTempPassword}
+                    >
+                      {copiedPassword ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    The user should change this password after their first login.
+                  </p>
+                </div>
+              )}
+
+              {!addMemberSuccess.isNewUser && (
+                <p className="text-sm text-muted-foreground">
+                  This user already had an account and has been added to your organization with their existing credentials.
+                </p>
+              )}
+
+              <DialogFooter>
+                <Button onClick={() => { resetAddMemberModal(); setAddMemberOpen(false); }}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={handleAddMember} className="space-y-4">
+              {addMemberError && (
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {addMemberError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="add-email">
+                  Email <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="add-email"
+                  type="email"
+                  value={addMemberForm.email}
+                  onChange={(e) => setAddMemberForm({ ...addMemberForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="member@company.com"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="add-name">
+                  Full Name <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="add-name"
+                  type="text"
+                  value={addMemberForm.fullName}
+                  onChange={(e) => setAddMemberForm({ ...addMemberForm, fullName: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="John Smith"
+                  required
+                  minLength={2}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="add-title">
+                    Job Title
+                  </label>
+                  <input
+                    id="add-title"
+                    type="text"
+                    value={addMemberForm.jobTitle}
+                    onChange={(e) => setAddMemberForm({ ...addMemberForm, jobTitle: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Engineer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="add-dept">
+                    Department
+                  </label>
+                  <input
+                    id="add-dept"
+                    type="text"
+                    value={addMemberForm.department}
+                    onChange={(e) => setAddMemberForm({ ...addMemberForm, department: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Engineering"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Role</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="MEMBER"
+                      checked={addMemberForm.role === "MEMBER"}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, role: e.target.value as "MEMBER" | "ADMIN" })}
+                      className="w-4 h-4 text-primary"
+                    />
+                    <span className="text-sm">Member</span>
+                  </label>
+                  {isOwner && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="ADMIN"
+                        checked={addMemberForm.role === "ADMIN"}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, role: e.target.value as "MEMBER" | "ADMIN" })}
+                        className="w-4 h-4 text-primary"
+                      />
+                      <span className="text-sm">Admin</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddMemberOpen(false)}
+                  disabled={addMemberLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={addMemberLoading || !addMemberForm.email || !addMemberForm.fullName}
+                >
+                  {addMemberLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Add Member
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialog.open} onOpenChange={(open) => { if (!open) closeResetPasswordDialog(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              {resetPasswordResult
+                ? "Password has been reset successfully."
+                : `Reset password for ${resetPasswordDialog.memberName}?`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetPasswordResult ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium mb-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Password Reset Successfully
+                </div>
+                <p className="text-sm text-green-600 dark:text-green-500">
+                  A new temporary password has been generated for {resetPasswordResult.name}.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
+                  New Temporary Password (share this securely)
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded border font-mono text-sm">
+                    {resetPasswordResult.tempPassword}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyResetPassword}
+                  >
+                    {copiedResetPassword ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  The user should change this password after logging in.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button onClick={closeResetPasswordDialog}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This will generate a new temporary password for <strong>{resetPasswordDialog.memberName}</strong> ({resetPasswordDialog.memberEmail}).
+                They will need to use this new password to log in.
+              </p>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeResetPasswordDialog}
+                  disabled={resetPasswordLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmResetPassword}
+                  disabled={resetPasswordLoading}
+                >
+                  {resetPasswordLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-4 w-4 mr-2" />
+                      Reset Password
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

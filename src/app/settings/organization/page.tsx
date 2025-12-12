@@ -10,6 +10,7 @@ import {
   Settings,
   User,
   Building2,
+  Bell,
   Save,
   Loader2,
   CheckCircle2,
@@ -88,7 +89,6 @@ export default function OrganizationSettingsPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
           description: description || null,
           inviteCodeEnabled,
         }),
@@ -155,18 +155,25 @@ export default function OrganizationSettingsPage() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <Link
           href="/settings/profile"
-          className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
         >
           <User className="h-4 w-4" />
           Profile
         </Link>
         <Link
+          href="/settings/notifications"
+          className="flex items-center gap-2 px-4 py-2 border-b-2 -mb-px border-transparent text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+        >
+          <Bell className="h-4 w-4" />
+          Notifications
+        </Link>
+        <Link
           href="/settings/organization"
           className={cn(
-            "flex items-center gap-2 px-4 py-2 border-b-2 -mb-px transition-colors",
+            "flex items-center gap-2 px-4 py-2 border-b-2 -mb-px transition-colors whitespace-nowrap",
             "border-primary text-primary"
           )}
         >
@@ -199,14 +206,14 @@ export default function OrganizationSettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {error && (
-                  <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {error}
                   </div>
                 )}
 
                 {success && (
-                  <div className="flex items-center gap-2 p-3 bg-green-50 text-green-600 rounded-lg text-sm">
+                  <div className="flex items-center gap-2 p-3 bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 rounded-lg text-sm">
                     <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
                     Changes saved successfully!
                   </div>
@@ -226,17 +233,18 @@ export default function OrganizationSettingsPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="name">
-                    Organization Name <span className="text-red-500">*</span>
+                    Organization Name
                   </label>
                   <input
                     id="name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    required
-                    minLength={2}
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-lg bg-muted text-muted-foreground cursor-not-allowed"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Organization name cannot be changed. Contact support if needed.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -248,13 +256,13 @@ export default function OrganizationSettingsPage() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Describe your organization..."
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[80px]"
+                    className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[80px]"
                     maxLength={500}
                   />
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" disabled={saving || !name.trim()}>
+                <Button type="submit" disabled={saving}>
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -301,12 +309,12 @@ export default function OrganizationSettingsPage() {
                   }}
                   className={cn(
                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                    inviteCodeEnabled ? "bg-primary" : "bg-gray-300"
+                    inviteCodeEnabled ? "bg-primary" : "bg-muted-foreground/30"
                   )}
                 >
                   <span
                     className={cn(
-                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                      "inline-block h-4 w-4 transform rounded-full bg-background shadow-sm transition-transform",
                       inviteCodeEnabled ? "translate-x-6" : "translate-x-1"
                     )}
                   />

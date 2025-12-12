@@ -60,13 +60,11 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-domain-executing via-domain-influencing to-domain-strategic flex items-center justify-center shadow-soft-lg">
-            <Sparkles className="h-6 w-6 text-white" />
-          </div>
+          <Sparkles className="h-8 w-8 text-primary" />
           <span className="font-display font-bold text-2xl">StrengthSync</span>
         </div>
 
-        <Card className="shadow-soft-lg">
+        <Card className="shadow-soft-lg dark:shadow-soft-lg-dark">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>Sign in to your account to continue</CardDescription>

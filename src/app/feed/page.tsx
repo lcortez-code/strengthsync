@@ -206,7 +206,7 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
         <div className="flex items-start gap-4 mb-4">
           <Avatar className="h-10 w-10">
             <AvatarImage src={item.creator.avatarUrl || undefined} />
-            <AvatarFallback className="bg-primary/10 text-primary">
+            <AvatarFallback className="bg-primary text-primary-foreground">
               {getInitials(item.creator.name)}
             </AvatarFallback>
           </Avatar>
@@ -304,7 +304,7 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
         )}
 
         {item.type === "BADGE_EARNED" && (
-          <div className="p-4 bg-yellow-50 rounded-lg">
+          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
               <span className="font-semibold">
@@ -388,7 +388,7 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
               <div key={comment.id} className="flex gap-3">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={comment.author.avatarUrl || undefined} />
-                  <AvatarFallback className="text-xs bg-muted">
+                  <AvatarFallback className="text-xs bg-muted dark:bg-muted/50">
                     {getInitials(comment.author.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -416,7 +416,7 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
                 value={commentInput}
                 onChange={(e) => setCommentInput(e.target.value)}
                 placeholder="Write a comment..."
-                className="flex-1 px-3 py-2 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="flex-1 px-3 py-2 text-sm border rounded-full bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
               <Button
                 type="submit"

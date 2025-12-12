@@ -73,9 +73,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-domain-executing via-domain-influencing to-domain-strategic flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
+              <Sparkles className="h-6 w-6 text-primary" />
               <span className="font-display font-bold text-xl">StrengthSync</span>
             </div>
             <div className="flex items-center gap-3">
@@ -127,7 +125,7 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up stagger-3">
               <Button size="xl" asChild>
                 <Link href="/auth/register">
-                  Start Free
+                  Get Started
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
@@ -199,7 +197,7 @@ export default function LandingPage() {
             ].map((d) => (
               <Card key={d.domain} variant={d.domain} className="p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <DomainIcon domain={d.domain} size="xl" withBackground />
+                  <DomainIcon domain={d.domain} size="xl" />
                   <h3 className="font-display font-semibold text-lg">{d.name}</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">{d.description}</p>
@@ -261,7 +259,7 @@ export default function LandingPage() {
               </p>
               <Button size="xl" asChild>
                 <Link href="/auth/register">
-                  Get Started Free
+                  Get Started
                   <ChevronRight className="ml-1 h-5 w-5" />
                 </Link>
               </Button>
@@ -275,9 +273,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-domain-executing via-domain-influencing to-domain-strategic flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-white" />
-              </div>
+              <Sparkles className="h-5 w-5 text-primary" />
               <span className="font-display font-semibold">StrengthSync</span>
             </div>
             <p className="text-sm text-muted-foreground">

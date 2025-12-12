@@ -18,15 +18,15 @@ const badgeVariants = cva(
         influencing: "border-transparent bg-domain-influencing text-white",
         relationship: "border-transparent bg-domain-relationship text-white",
         strategic: "border-transparent bg-domain-strategic text-white",
-        // Domain variants - soft
+        // Domain variants - soft (with dark mode support)
         "executing-soft":
-          "bg-domain-executing-light text-domain-executing-dark border-domain-executing/20",
+          "bg-domain-executing-light text-domain-executing-dark border-domain-executing/20 dark:bg-domain-executing/20 dark:text-domain-executing-muted dark:border-domain-executing/30",
         "influencing-soft":
-          "bg-domain-influencing-light text-domain-influencing-dark border-domain-influencing/20",
+          "bg-domain-influencing-light text-domain-influencing-dark border-domain-influencing/20 dark:bg-domain-influencing/20 dark:text-domain-influencing-muted dark:border-domain-influencing/30",
         "relationship-soft":
-          "bg-domain-relationship-light text-domain-relationship-dark border-domain-relationship/20",
+          "bg-domain-relationship-light text-domain-relationship-dark border-domain-relationship/20 dark:bg-domain-relationship/20 dark:text-domain-relationship-muted dark:border-domain-relationship/30",
         "strategic-soft":
-          "bg-domain-strategic-light text-domain-strategic-dark border-domain-strategic/20",
+          "bg-domain-strategic-light text-domain-strategic-dark border-domain-strategic/20 dark:bg-domain-strategic/20 dark:text-domain-strategic-muted dark:border-domain-strategic/30",
       },
       size: {
         default: "px-2.5 py-0.5 text-xs",

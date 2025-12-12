@@ -16,6 +16,9 @@ import {
   Sparkles,
   Check,
   X,
+  Lightbulb,
+  TrendingUp,
+  HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -42,6 +45,60 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+// Theme keyword mappings for auto-suggestion
+const THEME_KEYWORDS: Record<string, string[]> = {
+  achiever: ["completed", "finished", "accomplished", "productive", "delivered", "results", "goal"],
+  activator: ["started", "initiated", "launched", "kicked off", "began", "motivated", "action"],
+  adaptability: ["flexible", "adapted", "pivoted", "adjusted", "changed", "spontaneous"],
+  analytical: ["analyzed", "data", "logic", "evidence", "research", "numbers", "figured out"],
+  arranger: ["organized", "coordinated", "managed", "juggled", "orchestrated", "efficiency"],
+  belief: ["values", "purpose", "mission", "conviction", "integrity", "principles"],
+  command: ["decisive", "led", "directed", "took charge", "confronted", "bold"],
+  communication: ["presented", "explained", "storytelling", "articulated", "expressed", "wrote"],
+  competition: ["won", "best", "outperformed", "first", "benchmark", "beat"],
+  connectedness: ["connected", "linked", "purpose", "bigger picture", "meaning"],
+  consistency: ["fair", "equal", "standard", "process", "rules", "uniform"],
+  context: ["history", "background", "precedent", "learned from", "pattern"],
+  deliberative: ["careful", "thorough", "cautious", "risk", "planned", "anticipated"],
+  developer: ["mentored", "coached", "helped grow", "encouraged", "potential", "developed"],
+  discipline: ["structure", "routine", "organized", "planned", "systematic", "order"],
+  empathy: ["understood", "felt", "sensed", "emotional", "perspective", "compassion"],
+  focus: ["prioritized", "concentrated", "goal", "direction", "stayed on track"],
+  futuristic: ["vision", "future", "possibilities", "imagine", "dream", "what if"],
+  harmony: ["consensus", "agreement", "peace", "common ground", "resolved conflict"],
+  ideation: ["idea", "creative", "brainstorm", "innovative", "concept", "new approach"],
+  includer: ["included", "welcomed", "belonging", "invited", "acceptance"],
+  individualization: ["unique", "individual", "customized", "personalized", "tailored"],
+  input: ["collected", "gathered", "curious", "learned", "information", "resources"],
+  intellection: ["thought", "reflected", "considered", "pondered", "deep thinking"],
+  learner: ["learned", "studied", "curious", "grew", "developed", "mastered"],
+  maximizer: ["improved", "excellent", "optimized", "enhanced", "best possible"],
+  positivity: ["positive", "enthusiastic", "optimistic", "upbeat", "energized", "fun"],
+  relator: ["relationship", "trusted", "genuine", "close", "authentic", "bond"],
+  responsibility: ["reliable", "dependable", "committed", "owned", "accountable", "followed through"],
+  restorative: ["solved", "fixed", "resolved", "problem", "troubleshot", "diagnosed"],
+  "self-assurance": ["confident", "certain", "assured", "trusted instincts", "self-reliant"],
+  significance: ["important", "impact", "meaningful", "recognition", "contribution"],
+  strategic: ["strategic", "planned", "path", "alternatives", "options", "way forward"],
+  woo: ["connected", "networked", "charm", "won over", "rapport", "strangers"],
+};
+
+// Recognition quality tips
+const QUALITY_TIPS = [
+  "Be specific about what they did",
+  "Describe the impact on you or the team",
+  "Connect it to a strength they demonstrated",
+  "Share how it made a difference",
+];
+
+// Starter prompts
+const STARTER_PROMPTS = [
+  "When [person] [action], it helped [outcome]...",
+  "I noticed [person] using their [strength] when they...",
+  "Thanks to [person]'s work on [project], we were able to...",
+  "[Person] really showed their [strength] by...",
+];
+
 export default function CreateShoutoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,10 +112,44 @@ export default function CreateShoutoutPage() {
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<DomainSlug | null>(null);
   const [message, setMessage] = useState("");
+  const [impact, setImpact] = useState("");
+  const [suggestedThemes, setSuggestedThemes] = useState<string[]>([]);
+  const [showTips, setShowTips] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // AI Enhancement state
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhancedMessage, setEnhancedMessage] = useState<string | null>(null);
+  const [showEnhanced, setShowEnhanced] = useState(false);
+
+  // Auto-suggest themes based on message content
+  useEffect(() => {
+    if (message.length < 15) {
+      setSuggestedThemes([]);
+      return;
+    }
+
+    const lowercaseMessage = message.toLowerCase();
+    const suggestions: { slug: string; score: number }[] = [];
+
+    Object.entries(THEME_KEYWORDS).forEach(([themeSlug, keywords]) => {
+      const matchCount = keywords.filter((kw) => lowercaseMessage.includes(kw)).length;
+      if (matchCount > 0) {
+        suggestions.push({ slug: themeSlug, score: matchCount });
+      }
+    });
+
+    // Sort by match count and take top 3
+    const topSuggestions = suggestions
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map((s) => s.slug);
+
+    setSuggestedThemes(topSuggestions);
+  }, [message]);
 
   // Fetch members
   useEffect(() => {
@@ -86,6 +177,56 @@ export default function CreateShoutoutPage() {
     } finally {
       setLoadingMembers(false);
     }
+  };
+
+  // AI Enhancement handler
+  const handleEnhanceMessage = async () => {
+    if (!selectedMember || message.length < 10) return;
+
+    setEnhancing(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/ai/enhance-shoutout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          recipientId: selectedMember.id,
+          context: impact || undefined,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error?.message || "Failed to enhance message");
+        return;
+      }
+
+      setEnhancedMessage(result.data.enhancedMessage);
+      setShowEnhanced(true);
+    } catch (err) {
+      console.error("AI enhancement error:", err);
+      setError("Failed to enhance message. Please try again.");
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  // Accept enhanced message
+  const acceptEnhancedMessage = () => {
+    if (enhancedMessage) {
+      setMessage(enhancedMessage);
+      setEnhancedMessage(null);
+      setShowEnhanced(false);
+    }
+  };
+
+  // Reject enhanced message
+  const rejectEnhancedMessage = () => {
+    setEnhancedMessage(null);
+    setShowEnhanced(false);
   };
 
   // Fetch theme ID from slug
@@ -122,13 +263,18 @@ export default function CreateShoutoutPage() {
         themeId = await getThemeId(selectedThemeId);
       }
 
+      // Combine message and impact if impact is provided
+      const fullMessage = impact.trim()
+        ? `${message}\n\nImpact: ${impact}`
+        : message;
+
       const response = await fetch("/api/shoutouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           receiverId: selectedMember.id,
           themeId,
-          message,
+          message: fullMessage,
           isPublic: true,
         }),
       });
@@ -168,9 +314,7 @@ export default function CreateShoutoutPage() {
         <Card className="overflow-hidden">
           <CardContent className="pt-6">
             <div className="text-center py-12">
-              <div className="h-20 w-20 rounded-full bg-domain-strategic-light flex items-center justify-center mx-auto mb-4">
-                <Check className="h-10 w-10 text-domain-strategic" />
-              </div>
+              <Check className="h-12 w-12 text-domain-strategic mx-auto mb-4" />
               <h2 className="text-2xl font-bold">Shoutout Sent!</h2>
               <p className="text-muted-foreground mt-2">
                 {selectedMember?.name} will be notified of your recognition
@@ -222,11 +366,11 @@ export default function CreateShoutoutPage() {
         </CardHeader>
         <CardContent>
           {selectedMember ? (
-            <div className="flex items-center justify-between p-4 rounded-xl bg-domain-influencing-light/30 border border-domain-influencing/20">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-domain-influencing-light/30 dark:bg-domain-influencing/10 border border-domain-influencing/20">
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12">
                   <AvatarImage src={selectedMember.avatarUrl || undefined} />
-                  <AvatarFallback className="bg-domain-influencing-light text-domain-influencing">
+                  <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
                     {getInitials(selectedMember.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -267,7 +411,7 @@ export default function CreateShoutoutPage() {
                     >
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={member.avatarUrl || undefined} />
-                        <AvatarFallback className="bg-muted">
+                        <AvatarFallback className="bg-muted dark:bg-muted/50">
                           {getInitials(member.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -381,20 +525,175 @@ export default function CreateShoutoutPage() {
       {/* Step 3: Write message */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">3. Write your shoutout</CardTitle>
-          <CardDescription>Share how they demonstrated this strength</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-lg">3. Write your shoutout</CardTitle>
+              <CardDescription>Share how they demonstrated this strength</CardDescription>
+            </div>
+            <button
+              onClick={() => setShowTips(!showTips)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <HelpCircle className="h-4 w-4" />
+              Tips
+            </button>
+          </div>
         </CardHeader>
-        <CardContent>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Tell them specifically what they did and how it made an impact..."
-            rows={4}
-            className="w-full px-4 py-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-          />
-          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-            <span>{message.length} characters</span>
-            <span>Minimum 10 characters</span>
+        <CardContent className="space-y-4">
+          {/* Quality tips */}
+          {showTips && (
+            <div className="p-3 rounded-xl bg-domain-strategic/10 border border-domain-strategic/20">
+              <div className="flex items-center gap-2 text-sm font-medium text-domain-strategic mb-2">
+                <Lightbulb className="h-4 w-4" />
+                Recognition Quality Tips
+              </div>
+              <ul className="space-y-1">
+                {QUALITY_TIPS.map((tip, idx) => (
+                  <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-domain-strategic">•</span>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Starter prompt suggestions */}
+          {message.length === 0 && selectedMember && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Try starting with:</p>
+              <div className="flex flex-wrap gap-2">
+                {STARTER_PROMPTS.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setMessage(prompt.replace("[person]", selectedMember.name.split(" ")[0]))}
+                    className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground"
+                  >
+                    {prompt.replace("[person]", selectedMember.name.split(" ")[0]).slice(0, 40)}...
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Main message textarea */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">
+              What specific action did they take?
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Tell them specifically what they did..."
+              rows={3}
+              className="w-full px-4 py-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+            />
+            <div className="flex justify-between items-center mt-2">
+              <div className="text-xs text-muted-foreground">
+                <span>{message.length} characters</span>
+                <span className="mx-2">•</span>
+                <span>Minimum 10 characters</span>
+              </div>
+              {/* AI Enhance Button */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleEnhanceMessage}
+                disabled={!selectedMember || message.length < 10 || enhancing}
+                className="text-xs gap-1.5 text-domain-strategic hover:text-domain-strategic hover:bg-domain-strategic/10"
+              >
+                {enhancing ? (
+                  <>
+                    <div className="h-3 w-3 border-2 border-domain-strategic border-t-transparent rounded-full animate-spin" />
+                    Enhancing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3" />
+                    Enhance with AI
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* AI Enhanced Message Panel */}
+          {showEnhanced && enhancedMessage && (
+            <div className="p-4 rounded-xl bg-domain-strategic/10 border border-domain-strategic/30 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-domain-strategic">
+                <Sparkles className="h-4 w-4" />
+                AI-Enhanced Version
+              </div>
+              <p className="text-sm leading-relaxed bg-background/50 p-3 rounded-lg">
+                {enhancedMessage}
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={rejectEnhancedMessage}
+                  className="text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Keep Original
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={acceptEnhancedMessage}
+                  className="text-xs bg-domain-strategic hover:bg-domain-strategic/90"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Use Enhanced
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Auto-suggested themes */}
+          {suggestedThemes.length > 0 && !selectedThemeId && (
+            <div className="p-3 rounded-xl bg-domain-influencing/10 border border-domain-influencing/20">
+              <div className="flex items-center gap-2 text-sm font-medium text-domain-influencing mb-2">
+                <Sparkles className="h-4 w-4" />
+                Suggested strengths based on your message
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {suggestedThemes.map((slug) => {
+                  const theme = THEMES.find((t) => t.slug === slug);
+                  return theme ? (
+                    <button
+                      key={slug}
+                      onClick={() => setSelectedThemeId(slug)}
+                      className="text-sm px-3 py-1 rounded-full bg-card border border-domain-influencing/30 hover:border-domain-influencing text-foreground flex items-center gap-1.5"
+                    >
+                      <DomainIcon domain={theme.domain} size="sm" />
+                      {theme.name}
+                    </button>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Impact field (optional) */}
+          <div>
+            <label className="text-sm font-medium mb-2 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-domain-strategic" />
+              Impact (optional)
+            </label>
+            <textarea
+              value={impact}
+              onChange={(e) => setImpact(e.target.value)}
+              placeholder="How did this help you or the team? What was the outcome?"
+              rows={2}
+              className="w-full px-4 py-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Describing the impact makes recognition more meaningful
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
-    const domain = searchParams.get("domain");
-    const theme = searchParams.get("theme");
+    const domainFilter = searchParams.get("domain");
+    const themeFilter = searchParams.get("theme");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
@@ -65,28 +65,24 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Filter by theme
-    if (theme) {
-      where.strengths = {
-        some: {
-          theme: { slug: theme },
-          rank: { lte: 10 }, // Only consider top 10
-        },
+    // Filter by theme and/or domain
+    if (themeFilter || domainFilter) {
+      const strengthFilter: Record<string, unknown> = {
+        rank: { lte: 10 }, // Only consider top 10
       };
-    }
 
-    // Filter by domain
-    if (domain) {
-      where.strengths = {
-        ...(where.strengths as object || {}),
-        some: {
-          ...(where.strengths as { some?: object })?.some || {},
-          theme: {
-            domain: { slug: domain },
-          },
-          rank: { lte: 10 },
-        },
-      };
+      if (themeFilter && domainFilter) {
+        strengthFilter.theme = {
+          slug: themeFilter,
+          domain: { slug: domainFilter },
+        };
+      } else if (themeFilter) {
+        strengthFilter.theme = { slug: themeFilter };
+      } else if (domainFilter) {
+        strengthFilter.theme = { domain: { slug: domainFilter } };
+      }
+
+      where.strengths = { some: strengthFilter };
     }
 
     // Get total count
@@ -135,12 +131,14 @@ export async function GET(request: NextRequest) {
       jobTitle: m.user.jobTitle,
       department: m.user.department,
       points: m.points,
-      topStrengths: m.strengths.map((s) => ({
-        rank: s.rank,
-        themeName: s.theme.name,
-        themeSlug: s.theme.slug,
-        domain: s.theme.domain.slug,
-      })),
+      topStrengths: m.strengths
+        .filter((s) => s.theme?.domain)
+        .map((s) => ({
+          rank: s.rank,
+          themeName: s.theme.name,
+          themeSlug: s.theme.slug,
+          domain: s.theme.domain.slug,
+        })),
     }));
 
     return apiListSuccess(data, {
@@ -150,7 +148,8 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching members:", error);
+    console.error("Error fetching members:", error instanceof Error ? error.message : error);
+    console.error("Stack:", error instanceof Error ? error.stack : "N/A");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch members");
   }
 }

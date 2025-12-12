@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ThemeBadge } from "@/components/strengths/ThemeBadge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import {
   Upload,
   FileText,
   CheckCircle2,
   AlertCircle,
-  X,
   User,
   Mail,
   ArrowRight,
   Sparkles,
+  Search,
+  ChevronDown,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
 
 interface UploadResult {
@@ -42,6 +45,15 @@ interface ParsedThemePreview {
   rank: number;
 }
 
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  hasStrengths: boolean;
+}
+
 export default function UploadPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -52,14 +64,77 @@ export default function UploadPage() {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [previewThemes, setPreviewThemes] = useState<ParsedThemePreview[]>([]);
 
+  // Team members for selector
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+
   // Form for assigning to user
-  const [assignMode, setAssignMode] = useState<"existing" | "new">("new");
+  const [assignMode, setAssignMode] = useState<"select" | "manual">("select");
   const [assignEmail, setAssignEmail] = useState("");
   const [assignName, setAssignName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Check admin access
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
+
+  // Fetch team members on mount
+  useEffect(() => {
+    const fetchMembers = async () => {
+      setLoadingMembers(true);
+      try {
+        const res = await fetch("/api/members?limit=100");
+        if (res.ok) {
+          const data = await res.json();
+          // Transform API response to include hasStrengths
+          const transformed = (data.data || []).map((m: { id: string; name: string; email: string; avatarUrl: string | null; jobTitle: string | null; topStrengths?: unknown[] }) => ({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            avatarUrl: m.avatarUrl,
+            jobTitle: m.jobTitle,
+            hasStrengths: (m.topStrengths?.length || 0) > 0,
+          }));
+          setMembers(transformed);
+        }
+      } catch (err) {
+        console.error("Failed to fetch members:", err);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    if (isAdmin) {
+      fetchMembers();
+    }
+  }, [isAdmin]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
+        setShowMemberDropdown(false);
+      }
+    }
+
+    if (showMemberDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMemberDropdown]);
+
+  // Filter members based on search
+  const filteredMembers = members.filter((m) => {
+    const search = memberSearch.toLowerCase();
+    return (
+      m.name.toLowerCase().includes(search) ||
+      m.email.toLowerCase().includes(search) ||
+      (m.jobTitle && m.jobTitle.toLowerCase().includes(search))
+    );
+  });
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -108,7 +183,11 @@ export default function UploadPage() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      if (assignEmail) {
+      // Use selected member or manual entry
+      if (assignMode === "select" && selectedMember) {
+        formData.append("forUserEmail", selectedMember.email);
+        formData.append("forUserName", selectedMember.name);
+      } else if (assignMode === "manual" && assignEmail) {
         formData.append("forUserEmail", assignEmail);
         if (assignName) {
           formData.append("forUserName", assignName);
@@ -146,6 +225,9 @@ export default function UploadPage() {
     setAssignEmail("");
     setAssignName("");
     setPreviewThemes([]);
+    setSelectedMember(null);
+    setMemberSearch("");
+    setAssignMode("select");
   };
 
   if (!isAdmin) {
@@ -174,9 +256,7 @@ export default function UploadPage() {
         <Card variant="strategic" className="overflow-hidden">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-full bg-domain-strategic-light flex items-center justify-center">
-                <CheckCircle2 className="h-6 w-6 text-domain-strategic" />
-              </div>
+              <CheckCircle2 className="h-6 w-6 text-domain-strategic mt-1" />
               <div className="flex-1">
                 <h3 className="font-display font-semibold text-lg">Upload Successful!</h3>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -244,9 +324,9 @@ export default function UploadPage() {
                 className={cn(
                   "relative border-2 border-dashed rounded-2xl p-8 transition-all duration-200 text-center",
                   isDragging
-                    ? "border-primary bg-primary/5"
+                    ? "border-primary bg-primary/5 dark:bg-primary/10"
                     : selectedFile
-                    ? "border-domain-strategic bg-domain-strategic-light/50"
+                    ? "border-domain-strategic bg-domain-strategic-light/50 dark:bg-domain-strategic/20"
                     : "border-border hover:border-primary/50 hover:bg-muted/50"
                 )}
               >
@@ -259,9 +339,7 @@ export default function UploadPage() {
 
                 {selectedFile ? (
                   <div className="flex flex-col items-center">
-                    <div className="h-16 w-16 rounded-2xl bg-domain-strategic-light flex items-center justify-center mb-4">
-                      <FileText className="h-8 w-8 text-domain-strategic" />
-                    </div>
+                    <FileText className="h-10 w-10 text-domain-strategic mb-4" />
                     <p className="font-medium">{selectedFile.name}</p>
                     <p className="text-sm text-muted-foreground mt-1">
                       {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
@@ -278,9 +356,7 @@ export default function UploadPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">
-                    <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                    </div>
+                    <Upload className="h-10 w-10 text-muted-foreground mb-4" />
                     <p className="font-medium">Drop your PDF here</p>
                     <p className="text-sm text-muted-foreground mt-1">
                       or click to browse files
@@ -301,30 +377,187 @@ export default function UploadPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Email Address</label>
-                  <Input
-                    type="email"
-                    placeholder="teammate@company.com"
-                    value={assignEmail}
-                    onChange={(e) => setAssignEmail(e.target.value)}
-                    icon={<Mail className="h-4 w-4" />}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    If this email doesn&apos;t exist, a new team member will be created
-                  </p>
+                {/* Mode toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={assignMode === "select" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setAssignMode("select");
+                      setAssignEmail("");
+                      setAssignName("");
+                    }}
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Select Existing
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={assignMode === "manual" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setAssignMode("manual");
+                      setSelectedMember(null);
+                      setMemberSearch("");
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    New Member
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Full Name (for new members)</label>
-                  <Input
-                    type="text"
-                    placeholder="Jane Smith"
-                    value={assignName}
-                    onChange={(e) => setAssignName(e.target.value)}
-                    icon={<User className="h-4 w-4" />}
-                  />
-                </div>
+                {/* Member selector */}
+                {assignMode === "select" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Team Member</label>
+                    <div className="relative" ref={memberDropdownRef}>
+                      {/* Selected member display or search input */}
+                      {selectedMember ? (
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between p-3 border rounded-lg bg-muted/50 cursor-pointer hover:bg-muted text-left"
+                          onClick={() => {
+                            setSelectedMember(null);
+                            setShowMemberDropdown(true);
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar size="sm">
+                              <AvatarImage src={selectedMember.avatarUrl || undefined} />
+                              <AvatarFallback className="bg-primary text-primary-foreground">
+                                {getInitials(selectedMember.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-sm">{selectedMember.name}</p>
+                              <p className="text-xs text-muted-foreground">{selectedMember.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedMember.hasStrengths && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                Has Strengths
+                              </span>
+                            )}
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Search by name or email..."
+                            value={memberSearch}
+                            onChange={(e) => {
+                              setMemberSearch(e.target.value);
+                              setShowMemberDropdown(true);
+                            }}
+                            onFocus={() => setShowMemberDropdown(true)}
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                          {loadingMembers && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Dropdown */}
+                      {showMemberDropdown && !selectedMember && (
+                        <div className="absolute z-10 w-full mt-1 bg-card border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                          {filteredMembers.length === 0 ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                              {memberSearch ? (
+                                <>
+                                  No members found.{" "}
+                                  <button
+                                    type="button"
+                                    className="text-primary hover:underline"
+                                    onClick={() => {
+                                      setAssignMode("manual");
+                                      setAssignEmail(memberSearch.includes("@") ? memberSearch : "");
+                                      setAssignName(memberSearch.includes("@") ? "" : memberSearch);
+                                      setShowMemberDropdown(false);
+                                    }}
+                                  >
+                                    Add manually
+                                  </button>
+                                </>
+                              ) : (
+                                "Type to search team members"
+                              )}
+                            </div>
+                          ) : (
+                            filteredMembers.slice(0, 10).map((member) => (
+                              <button
+                                key={member.id}
+                                type="button"
+                                className="w-full flex items-center gap-3 p-3 hover:bg-muted text-left transition-colors"
+                                onClick={() => {
+                                  setSelectedMember(member);
+                                  setShowMemberDropdown(false);
+                                  setMemberSearch("");
+                                }}
+                              >
+                                <Avatar size="sm">
+                                  <AvatarImage src={member.avatarUrl || undefined} />
+                                  <AvatarFallback className="bg-primary text-primary-foreground">
+                                    {getInitials(member.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">{member.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                                </div>
+                                {member.hasStrengths && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 flex-shrink-0">
+                                    Has Strengths
+                                  </span>
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {selectedMember?.hasStrengths && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        This member already has strengths. Uploading will replace their existing data.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual entry */}
+                {assignMode === "manual" && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Email Address</label>
+                      <Input
+                        type="email"
+                        placeholder="teammate@company.com"
+                        value={assignEmail}
+                        onChange={(e) => setAssignEmail(e.target.value)}
+                        icon={<Mail className="h-4 w-4" />}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Full Name</label>
+                      <Input
+                        type="text"
+                        placeholder="Jane Smith"
+                        value={assignName}
+                        onChange={(e) => setAssignName(e.target.value)}
+                        icon={<User className="h-4 w-4" />}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -361,17 +594,17 @@ export default function UploadPage() {
         <CardHeader>
           <CardTitle className="text-lg">About CliftonStrengths Reports</CardTitle>
         </CardHeader>
-        <CardContent className="prose prose-sm dark:prose-invert">
-          <p>
+        <CardContent className="space-y-3">
+          <p className="text-sm">
             Upload the PDF export from Gallup&apos;s CliftonStrengths assessment. The system will
             automatically extract:
           </p>
-          <ul>
+          <ul className="list-disc list-inside ml-4 space-y-1 text-sm">
             <li>Participant name (when available)</li>
             <li>Top 5, Top 10, or all 34 strength themes</li>
             <li>Theme rankings in order of strength</li>
           </ul>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Team members can take the CliftonStrengths assessment at{" "}
             <a
               href="https://www.gallup.com/cliftonstrengths"

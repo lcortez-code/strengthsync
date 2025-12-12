@@ -159,7 +159,7 @@ export default function ShoutoutsPage() {
                   <Link href={`/team/${shoutout.giver.id}`} className="flex-shrink-0">
                     <Avatar className="h-12 w-12 ring-2 ring-offset-2 ring-domain-influencing/20 hover:ring-domain-influencing transition-all">
                       <AvatarImage src={shoutout.giver.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-domain-influencing-light text-domain-influencing">
+                      <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
                         {getInitials(shoutout.giver.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -213,7 +213,7 @@ export default function ShoutoutsPage() {
                   <Link href={`/team/${shoutout.receiver.id}`} className="flex-shrink-0">
                     <Avatar className="h-12 w-12 ring-2 ring-offset-2 ring-domain-strategic/20 hover:ring-domain-strategic transition-all">
                       <AvatarImage src={shoutout.receiver.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-domain-strategic-light text-domain-strategic">
+                      <AvatarFallback className="bg-domain-strategic-light text-domain-strategic dark:bg-domain-strategic/20 dark:text-domain-strategic-muted">
                         {getInitials(shoutout.receiver.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -227,9 +227,7 @@ export default function ShoutoutsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-12">
-              <div className="h-16 w-16 rounded-full bg-domain-influencing-light flex items-center justify-center mx-auto mb-4">
-                <Heart className="h-8 w-8 text-domain-influencing" />
-              </div>
+              <Heart className="h-10 w-10 text-domain-influencing mx-auto mb-4" />
               <h3 className="text-lg font-semibold">No Shoutouts Yet</h3>
               <p className="text-sm text-muted-foreground mt-1 mb-4">
                 {filter === "given"

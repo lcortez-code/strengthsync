@@ -1,16 +1,23 @@
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/config";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { SessionProvider } from "@/components/providers/SessionProvider";
 
-export default function AdminMembersLayout({
+export default async function AdminMembersLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    redirect("/auth/login");
+  }
+
   return (
-    <DashboardLayout>
-      <Suspense fallback={<div className="animate-pulse">Loading...</div>}>
-        {children}
-      </Suspense>
-    </DashboardLayout>
+    <SessionProvider session={session}>
+      <DashboardLayout>{children}</DashboardLayout>
+    </SessionProvider>
   );
 }

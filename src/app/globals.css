@@ -143,7 +143,7 @@
     box-shadow: 0 0 30px -5px var(--domain-strategic);
   }
 
-  /* Animated gradient mesh background */
+  /* Animated gradient mesh background (with dark mode) */
   .mesh-gradient {
     background:
       radial-gradient(at 40% 20%, rgba(123, 104, 238, 0.15) 0px, transparent 50%),
@@ -153,7 +153,16 @@
       radial-gradient(at 0% 100%, rgba(123, 104, 238, 0.1) 0px, transparent 50%);
   }
 
-  /* Soft card with hover lift */
+  .dark .mesh-gradient {
+    background:
+      radial-gradient(at 40% 20%, rgba(123, 104, 238, 0.25) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(245, 166, 35, 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, rgba(74, 144, 217, 0.2) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, rgba(124, 179, 66, 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(123, 104, 238, 0.15) 0px, transparent 50%);
+  }
+
+  /* Soft card with hover lift (with dark mode) */
   .card-interactive {
     @apply transition-all duration-300 ease-out;
   }
@@ -161,6 +170,10 @@
   .card-interactive:hover {
     @apply -translate-y-1;
     box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .card-interactive:hover {
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
   }
 
   /* Strength card shine effect */
@@ -242,21 +255,25 @@
     background-image: linear-gradient(135deg, var(--domain-executing) 0%, var(--domain-influencing) 33%, var(--domain-strategic) 66%, var(--domain-relationship) 100%);
   }
 
-  /* Badge pill styles */
+  /* Badge pill styles (with dark mode) */
   .badge-executing {
     @apply bg-domain-executing-light text-domain-executing-dark border border-domain-executing/20;
+    @apply dark:bg-domain-executing/20 dark:text-domain-executing-muted dark:border-domain-executing/30;
   }
 
   .badge-influencing {
     @apply bg-domain-influencing-light text-domain-influencing-dark border border-domain-influencing/20;
+    @apply dark:bg-domain-influencing/20 dark:text-domain-influencing-muted dark:border-domain-influencing/30;
   }
 
   .badge-relationship {
     @apply bg-domain-relationship-light text-domain-relationship-dark border border-domain-relationship/20;
+    @apply dark:bg-domain-relationship/20 dark:text-domain-relationship-muted dark:border-domain-relationship/30;
   }
 
   .badge-strategic {
     @apply bg-domain-strategic-light text-domain-strategic-dark border border-domain-strategic/20;
+    @apply dark:bg-domain-strategic/20 dark:text-domain-strategic-muted dark:border-domain-strategic/30;
   }
 }
 
@@ -321,4 +338,43 @@
 /* Smooth transitions for theme changes */
 html {
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Browser autofill dark mode styling */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: hsl(var(--foreground));
+}
+
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active,
+.dark textarea:-webkit-autofill,
+.dark textarea:-webkit-autofill:hover,
+.dark textarea:-webkit-autofill:focus,
+.dark textarea:-webkit-autofill:active,
+.dark select:-webkit-autofill,
+.dark select:-webkit-autofill:hover,
+.dark select:-webkit-autofill:focus,
+.dark select:-webkit-autofill:active {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+  box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: hsl(var(--foreground));
 }

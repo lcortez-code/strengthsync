@@ -19,6 +19,12 @@ import {
   Target,
   Handshake,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  Lightbulb,
+  UserPlus,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import type { DomainSlug } from "@/constants/strengths-data";
@@ -38,10 +44,15 @@ interface MemberProfile {
   strengths: {
     id: string;
     rank: number;
+    personalizedDescription: string | null;
     theme: {
       slug: string;
       name: string;
       shortDescription: string;
+      fullDescription: string;
+      blindSpots: string[];
+      actionItems: string[];
+      worksWith: string[];
       domain: {
         slug: string;
         name: string;
@@ -83,8 +94,21 @@ export default function MemberProfilePage() {
   const [member, setMember] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedStrengths, setExpandedStrengths] = useState<Set<string>>(new Set());
 
   const isOwnProfile = session?.user?.memberId === memberId;
+
+  const toggleStrengthExpansion = (strengthId: string) => {
+    setExpandedStrengths((prev) => {
+      const next = new Set(prev);
+      if (next.has(strengthId)) {
+        next.delete(strengthId);
+      } else {
+        next.add(strengthId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchMemberProfile();
@@ -202,7 +226,7 @@ export default function MemberProfilePage() {
           <div className="flex flex-col sm:flex-row items-start gap-6">
             <Avatar className="h-32 w-32 border-4 border-background shadow-lg">
               <AvatarImage src={member.user.image || undefined} />
-              <AvatarFallback className="text-3xl bg-muted">
+              <AvatarFallback className="text-3xl bg-muted dark:bg-muted/50">
                 {getInitials(member.user.name)}
               </AvatarFallback>
             </Avatar>
@@ -278,34 +302,150 @@ export default function MemberProfilePage() {
             <CardContent>
               {member.strengths.length > 0 ? (
                 <div className="space-y-4">
-                  {member.strengths.slice(0, 5).map((strength) => (
-                    <div
-                      key={strength.id}
-                      className="flex items-start gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                    >
-                      <span className="text-2xl font-bold text-muted-foreground w-8">
-                        #{strength.rank}
-                      </span>
-                      <DomainIcon
-                        domain={strength.theme.domain.slug as DomainSlug}
-                        size="lg"
-                        withBackground
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{strength.theme.name}</span>
-                          <ThemeBadge
-                            themeName={strength.theme.name}
-                            domainSlug={strength.theme.domain.slug as DomainSlug}
-                            size="sm"
+                  {member.strengths.slice(0, 5).map((strength) => {
+                    const isExpanded = expandedStrengths.has(strength.id);
+                    const hasDetails =
+                      strength.theme.fullDescription ||
+                      strength.theme.blindSpots.length > 0 ||
+                      strength.theme.actionItems.length > 0 ||
+                      strength.theme.worksWith.length > 0;
+
+                    return (
+                      <div
+                        key={strength.id}
+                        className="rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden"
+                      >
+                        <button
+                          onClick={() => hasDetails && toggleStrengthExpansion(strength.id)}
+                          className="flex items-start gap-4 p-4 w-full text-left"
+                          disabled={!hasDetails}
+                        >
+                          <span className="text-2xl font-bold text-muted-foreground w-8">
+                            #{strength.rank}
+                          </span>
+                          <DomainIcon
+                            domain={strength.theme.domain.slug as DomainSlug}
+                            size="lg"
                           />
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {strength.theme.shortDescription}
-                        </p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{strength.theme.name}</span>
+                              <ThemeBadge
+                                themeName={strength.theme.name}
+                                domainSlug={strength.theme.domain.slug as DomainSlug}
+                                size="sm"
+                              />
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {strength.theme.shortDescription}
+                            </p>
+                          </div>
+                          {hasDetails && (
+                            <div className="flex-shrink-0 text-muted-foreground">
+                              {isExpanded ? (
+                                <ChevronUp className="h-5 w-5" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5" />
+                              )}
+                            </div>
+                          )}
+                        </button>
+
+                        {/* Expanded Details */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-4 border-t border-border/50 pt-4 ml-12">
+                            {/* Full Description */}
+                            {strength.theme.fullDescription && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <BookOpen className="h-4 w-4 text-domain-strategic" />
+                                  About This Strength
+                                </div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  {strength.theme.fullDescription}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Personalized Description (if available) */}
+                            {strength.personalizedDescription && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <Sparkles className="h-4 w-4 text-domain-influencing" />
+                                  Your Personal Insight
+                                </div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  {strength.personalizedDescription}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Blind Spots */}
+                            {strength.theme.blindSpots.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                  Potential Blind Spots
+                                </div>
+                                <ul className="space-y-1">
+                                  {strength.theme.blindSpots.map((spot, idx) => (
+                                    <li
+                                      key={idx}
+                                      className="text-sm text-muted-foreground flex items-start gap-2"
+                                    >
+                                      <span className="text-amber-500 mt-1.5">•</span>
+                                      {spot}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Action Items */}
+                            {strength.theme.actionItems.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <Lightbulb className="h-4 w-4 text-domain-strategic" />
+                                  Action Ideas
+                                </div>
+                                <ul className="space-y-1">
+                                  {strength.theme.actionItems.map((item, idx) => (
+                                    <li
+                                      key={idx}
+                                      className="text-sm text-muted-foreground flex items-start gap-2"
+                                    >
+                                      <span className="text-domain-strategic mt-1.5">•</span>
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Works Well With */}
+                            {strength.theme.worksWith.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <UserPlus className="h-4 w-4 text-domain-relationship" />
+                                  Partners Well With
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {strength.theme.worksWith.map((theme, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-xs px-2 py-1 rounded-full bg-domain-relationship/10 text-domain-relationship"
+                                    >
+                                      {theme}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -342,7 +482,6 @@ export default function MemberProfilePage() {
                       <DomainIcon
                         domain={strength.theme.domain.slug as DomainSlug}
                         size="sm"
-                        withBackground
                       />
                       <span className="text-sm">{strength.theme.name}</span>
                     </div>
@@ -370,7 +509,7 @@ export default function MemberProfilePage() {
                       className="flex items-start gap-4 p-4 rounded-xl bg-muted/30"
                     >
                       <Avatar>
-                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing">
+                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
                           {getInitials(shoutout.giver.user.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -441,7 +580,7 @@ export default function MemberProfilePage() {
                     <div key={d.domain}>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <DomainIcon domain={d.domain} size="sm" withBackground />
+                          <DomainIcon domain={d.domain} size="sm" />
                           <span className="text-sm font-medium">{d.name}</span>
                         </div>
                         <span className="text-sm text-muted-foreground">
@@ -484,9 +623,7 @@ export default function MemberProfilePage() {
                       className="flex flex-col items-center text-center p-2"
                       title={badge.badge.description}
                     >
-                      <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-1">
-                        <span className="text-2xl">{badge.badge.icon}</span>
-                      </div>
+                      <span className="text-2xl mb-1">{badge.badge.icon}</span>
                       <span className="text-xs font-medium line-clamp-2">
                         {badge.badge.name}
                       </span>

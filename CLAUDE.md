@@ -2,95 +2,63 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Note**: This project uses [bd (beads)](https://github.com/steveyegge/beads) for issue tracking. Use `bd` commands instead of markdown TODOs. See AGENTS.md for workflow details.
+
 ## Project Overview
 
 **StrengthSync** is a CliftonStrengths-based team collaboration app that helps teams discover, leverage, and celebrate their unique strengths through analytics, recognition, and gamification.
 
 **GitHub Repository**: https://github.com/freeup86/strengthsync
 
-### Key Features
-- **Team Analytics**: Domain balance charts, gap analysis, partnership suggestions
-- **Skills Directory**: Search and browse team members by strengths and expertise
-- **Social Features**: Shoutouts (peer recognition), skill request marketplace, activity feed
-- **Gamification**: Points, badges, streaks, leaderboards
-- **Challenges**: Team activities like Strengths Bingo
-- **Mentorship**: Complementary strength-based matching
-- **Strengths Cards**: Digital baseball card-style profile cards
-- **Notifications**: Real-time notification system
-
 ### Tech Stack
 - **Framework**: Next.js 15 (App Router, Turbopack)
 - **Database**: PostgreSQL with Prisma ORM
-- **Auth**: NextAuth.js with credentials provider
+- **Auth**: NextAuth.js with credentials provider (JWT strategy, 7-day sessions)
 - **Styling**: Tailwind CSS with custom domain color system
-- **UI**: Custom components + Radix UI primitives
+- **UI**: Custom components + Radix UI primitives (AlertDialog, Dialog, Dropdown, etc.)
+- **Email**: Resend for transactional emails
+- **Charts**: Recharts for data visualization
+- **AI**: Vercel AI SDK with OpenAI (gpt-4o-mini default) for chat/completions
+- **Validation**: Zod for schema validation
 
-## Common Commands
+## Commands
 
 ```bash
 # Development
-npm run dev              # Start dev server (port 3000)
+npm run dev              # Start dev server (port 3000) with Turbopack
 npm run build            # Build for production
 npm run lint             # Run ESLint
-npm run type-check       # TypeScript type checking
+npm run type-check       # TypeScript type checking (tsc --noEmit)
 
 # Database
-npm run db:generate      # Generate Prisma client
+npm run db:generate      # Generate Prisma client (also runs on postinstall)
 npm run db:push          # Push schema to database
-npm run db:migrate       # Run migrations
-npm run db:seed          # Seed domains, themes, badges
-npm run db:reset         # Reset database
+npm run db:migrate       # Run migrations (prisma migrate dev)
+npm run db:seed          # Seed domains, themes, badges (npx tsx prisma/seed.ts)
+npm run db:reset         # Reset database (prisma migrate reset)
 npx prisma studio        # Open Prisma Studio (DB GUI)
+
+# Docker
+docker-compose up -d     # Start all services
+docker-compose down      # Stop services
 ```
 
 ## Architecture
 
-### Directory Structure
-```
-src/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   │   ├── auth/          # NextAuth endpoints
-│   │   ├── challenges/    # Challenges & Bingo
-│   │   ├── feed/          # Activity feed, reactions, comments
-│   │   ├── mentorship/    # Mentorship matching
-│   │   ├── notifications/ # Notifications API
-│   │   ├── skill-requests/# Marketplace
-│   │   ├── shoutouts/     # Peer recognition
-│   │   ├── strengths/     # Strengths upload/parsing
-│   │   └── team/          # Team analytics
-│   ├── auth/              # Login, register, join pages
-│   ├── cards/             # Strengths cards feature
-│   ├── challenges/        # Challenges & Bingo
-│   ├── dashboard/         # Main dashboard
-│   ├── directory/         # Team directory
-│   ├── feed/              # Activity feed
-│   ├── leaderboard/       # Points leaderboard
-│   ├── marketplace/       # Skill requests
-│   ├── mentorship/        # Mentorship matching
-│   ├── notifications/     # Notifications page
-│   ├── shoutouts/         # Peer recognition
-│   ├── team/              # Team analytics & profiles
-│   └── admin/             # Admin features (upload)
-├── components/
-│   ├── ui/               # Base UI components (Button, Card, etc.)
-│   ├── layout/           # DashboardLayout, Sidebar
-│   ├── strengths/        # ThemeBadge, DomainIcon, StrengthsCard
-│   ├── team/             # Team analytics components
-│   ├── notifications/    # NotificationBell component
-│   └── providers/        # SessionProvider
-├── lib/
-│   ├── prisma.ts         # Prisma client singleton
-│   ├── auth/config.ts    # NextAuth configuration
-│   ├── api/response.ts   # API response helpers
-│   ├── pdf/parser.ts     # CliftonStrengths PDF parser
-│   ├── strengths/        # Analytics functions
-│   └── utils.ts          # Utility functions
-├── constants/
-│   └── strengths-data.ts # All 34 themes, 4 domains
-├── types/                # TypeScript types
-└── middleware.ts         # Auth middleware
-```
+### Key Directories
+- `src/app/` - Next.js App Router pages and API routes
+- `src/app/api/` - All API endpoints (auth, team, shoutouts, challenges, etc.)
+- `src/components/` - React components (ui/, layout/, strengths/, team/)
+- `src/lib/` - Utilities and services:
+  - `prisma.ts` - Database client singleton
+  - `auth/config.ts` - NextAuth configuration
+  - `api/response.ts` - Standardized API response helpers
+  - `pdf/parser.ts` - CliftonStrengths PDF parsing
+  - `ai/` - AI service (client, rate-limiter, token-tracker, prompts, tools)
+  - `email/` - Resend email service and digest templates
+  - `strengths/analytics.ts` - Team analytics calculations
+- `src/constants/strengths-data.ts` - All 34 CliftonStrengths themes and 4 domains
+- `prisma/schema.prisma` - Database schema (source of truth for models)
 
 ### CliftonStrengths Domain Colors
 | Domain | Hex | Tailwind Classes |
@@ -100,21 +68,23 @@ src/
 | Relationship | #4A90D9 (Blue) | `bg-domain-relationship`, `text-domain-relationship` |
 | Strategic | #7CB342 (Green) | `bg-domain-strategic`, `text-domain-strategic` |
 
-### Database Models (Prisma)
-- **StrengthDomain** / **StrengthTheme**: Reference data for 34 themes across 4 domains
-- **Organization** / **User** / **OrganizationMember**: Multi-tenant team management
-- **MemberStrength**: User's ranked themes (1-34)
-- **Shoutout**: Peer recognition tied to themes
-- **SkillRequest** / **SkillRequestResponse**: Marketplace for skill needs
-- **Mentorship**: Mentor-mentee relationships
-- **Badge** / **BadgeEarned**: Gamification achievements
-- **TeamChallenge** / **ChallengeParticipant**: Team activities with JSON progress
-- **FeedItem** / **Reaction** / **Comment**: Social feed
-- **Notification**: User notifications
+Each domain color has variants: `DEFAULT`, `-light`, `-dark`, `-muted` (e.g., `bg-domain-executing-light`).
+
+### Multi-Tenant Architecture
+- **Organization**: Contains members, challenges, feed items, review cycles. Has `inviteCode` for member signup.
+- **User**: Can belong to multiple organizations via OrganizationMember
+- **OrganizationMember**: Junction table with role (OWNER/ADMIN/MEMBER), strengths (1-34 ranking), points, badges
+- Session contains: `id`, `email`, `name`, `organizationId`, `memberId`, `role`
+- All API routes must verify both `organizationId` and `memberId` from session
+
+### Route Protection
+Protected routes (require auth): `/dashboard`, `/team`, `/directory`, `/marketplace`, `/mentorship`, `/shoutouts`, `/challenges`, `/cards`, `/leaderboard`, `/feed`, `/settings`, `/admin`, `/notifications`, `/partnerships`, `/reviews`
+
+Auth routes redirect to dashboard if logged in: `/auth/login`, `/auth/register`
 
 ### API Response Pattern
 ```typescript
-import { apiSuccess, apiError, ApiErrorCode, apiCreated, apiListSuccess } from '@/lib/api/response';
+import { apiSuccess, apiError, ApiErrorCode, apiCreated, apiListSuccess, apiErrors } from '@/lib/api/response';
 
 // Success
 return apiSuccess(data, 'Optional message');
@@ -125,8 +95,13 @@ return apiCreated(newResource);
 // List with pagination
 return apiListSuccess(data, { page, limit, total, hasMore });
 
-// Error
+// Error (explicit)
 return apiError(ApiErrorCode.NOT_FOUND, 'Resource not found');
+
+// Error (convenience helpers)
+return apiErrors.unauthorized();
+return apiErrors.notFound('Member');
+return apiErrors.badRequest('Invalid input', { field: 'email' });
 ```
 
 ### Prisma JSON Fields
@@ -140,12 +115,6 @@ await prisma.model.create({
 });
 ```
 
-### Authentication
-- Uses NextAuth.js with credentials provider
-- Session contains: `id`, `email`, `name`, `organizationId`, `memberId`, `role`
-- Roles: `OWNER`, `ADMIN`, `MEMBER`
-- Protected routes handled via `middleware.ts`
-
 ## Code Standards
 
 1. **NO mock data** - Real database connections only
@@ -154,15 +123,15 @@ await prisma.model.create({
 4. **Complete error handling** - Production-grade try/catch
 5. **Full validation** - Input validation with Zod
 6. **Security built-in** - Parameterized queries, XSS prevention
-7. **Modal dialogs** - Use UI components instead of browser alerts
-8. **Full-stack completeness** - Every backend needs frontend UI
+7. **Modal dialogs** - Use `@radix-ui/react-alert-dialog` instead of browser alerts
+8. **Full-stack completeness** - Every backend feature needs frontend UI
 
 ## Common Patterns
 
 ### Adding a new page
 1. Create `src/app/[route]/page.tsx`
 2. Create `src/app/[route]/layout.tsx` with DashboardLayout wrapper
-3. Add to navigation in `DashboardLayout.tsx`
+3. Add to navigation in `src/components/layout/DashboardLayout.tsx`
 
 ### Adding a new API route
 ```typescript
@@ -223,7 +192,7 @@ import type { DomainSlug } from "@/constants/strengths-data";
 
 // DomainSlug = "executing" | "influencing" | "relationship" | "strategic"
 <ThemeBadge themeName="Strategic" domainSlug="strategic" />
-<DomainIcon domain={domain as DomainSlug} withBackground />
+<DomainIcon domain={domain as DomainSlug} />
 ```
 
 ### Common Prisma Include Patterns
@@ -261,33 +230,81 @@ Required in `.env.local`:
 DATABASE_URL=postgresql://...
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=<openssl rand -base64 32>
+OPENAI_API_KEY=sk-...  # Required for AI features
 ```
 
 Optional:
 ```env
 AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET
 REDIS_URL
+RESEND_API_KEY  # For email features
 ```
 
-## Feature-Specific Notes
+## Key Features
 
-### Strengths Bingo
-- 5x5 grid with random themes
-- Players mark squares by finding team members with those themes
-- Progress stored as JSON in `ChallengeParticipant.progress`
+### Strengths Bingo Challenge
+- 5x5 grid stored as JSON in `ChallengeParticipant.progress`
 - Win conditions: row, column, or diagonal
 
 ### Mentorship Matching
-- Based on complementary strengths (defined in `MENTORSHIP_PAIRINGS`)
-- Score calculated from theme pairings + domain diversity
-- Users can request mentorship from suggested matches
+- Complementary strengths defined in `MENTORSHIP_PAIRINGS` constant
+- Score based on theme pairings + domain diversity
 
 ### Activity Feed
-- Polymorphic feed items (SHOUTOUT, SKILL_REQUEST, BADGE_EARNED, etc.)
+- Polymorphic `FeedItem` with types: SHOUTOUT, SKILL_REQUEST, BADGE_EARNED, etc.
 - Reactions: like, celebrate, love, star, clap
-- Threaded comments with parentId support
+- Threaded comments via `parentId`
 
-### Notifications
-- Real-time polling (30-second intervals)
-- Types: SHOUTOUT_RECEIVED, SKILL_REQUEST_RESPONSE, MENTORSHIP_REQUEST, BADGE_EARNED, etc.
-- NotificationBell component in header with dropdown
+### Performance Reviews
+- Cycles: QUARTERLY, SEMI_ANNUAL, ANNUAL, PROJECT, PROBATION
+- ReviewGoal with `alignedThemes` for strengths-based goals
+- ReviewEvidence links to shoutouts, mentorship, challenges
+
+## AI Integration
+
+### Streaming Chat
+```typescript
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const result = await streamText({
+  model: openai('gpt-4o-mini'),
+  messages,
+  system: 'You are a CliftonStrengths coach...',
+});
+
+return result.toDataStreamResponse();
+```
+
+Frontend uses `useChat` hook from `@ai-sdk/react` for streaming responses.
+
+### AI Features
+Located in `src/app/api/ai/`:
+- `enhance-shoutout` - Improve shoutout messages
+- `generate-bio` - Create strength-based bios
+- `recognition-starters` / `recognition-prompts` - Suggest recognition text
+- `team-narrative` - Generate team strength stories
+- `gap-recommendations` - Suggest how to address team gaps
+- `development-insights` - Personal development suggestions
+- `partnership-reasoning` - Explain why two people work well together
+- `mentorship-guide` - Mentorship conversation guides
+- `match-skill-request` - Find team members for skill requests
+- `goals/suggest` - Suggest performance review goals
+- `chat` - General strengths coaching chat
+
+AI usage is tracked in `AIUsageLog` table with token counts and costs.
+
+## Key Data Relationships
+
+### Strengths Flow
+1. Admin uploads PDF → `StrengthsDocument` created
+2. PDF parsed → 34 `MemberStrength` records created (rank 1-34)
+3. `isTop5` and `isTop10` flags set automatically
+4. Each `MemberStrength` links to `StrengthTheme` → `StrengthDomain`
+
+### Gamification Flow
+1. Actions (shoutouts, challenges, etc.) trigger point awards
+2. Points accumulate on `OrganizationMember.points`
+3. Badge criteria checked → `BadgeEarned` records created
+4. `FeedItem` created for social visibility
+5. `Notification` sent to relevant users

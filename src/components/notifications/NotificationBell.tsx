@@ -169,7 +169,7 @@ export function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-80 bg-card rounded-xl shadow-lg border z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="font-semibold">Notifications</h3>

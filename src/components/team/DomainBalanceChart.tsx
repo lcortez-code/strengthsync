@@ -102,7 +102,7 @@ export function DomainBalanceChart({
               key={d.domain}
               className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors"
             >
-              <DomainIcon domain={d.domain} size="sm" withBackground />
+              <DomainIcon domain={d.domain} size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{d.domainName}</p>
                 <p className="text-xs text-muted-foreground">

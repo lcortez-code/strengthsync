@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Handshake, ArrowRight, Sparkles, Users } from "lucide-react";
+import { Handshake, ArrowRight, Sparkles, Users, ChevronDown, ChevronUp, Loader2, Brain, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -19,6 +20,12 @@ interface PartnershipSuggestionsProps {
   partnerships: Partnership[];
   totalPossiblePairings: number;
   showAll?: boolean;
+}
+
+interface AIReasoningState {
+  loading: boolean;
+  error: string | null;
+  reasoning: string | null;
 }
 
 function getInitials(name: string): string {
@@ -42,6 +49,198 @@ function getScoreLabel(score: number): string {
   return "Good match";
 }
 
+// Partnership card with expandable AI reasoning
+function PartnershipCard({ partnership }: { partnership: Partnership }) {
+  const [expanded, setExpanded] = useState(false);
+  const [aiReasoning, setAiReasoning] = useState<AIReasoningState>({
+    loading: false,
+    error: null,
+    reasoning: null,
+  });
+
+  const fetchAIReasoning = useCallback(async () => {
+    if (aiReasoning.reasoning || aiReasoning.loading) return;
+
+    setAiReasoning((prev) => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const response = await fetch("/api/ai/partnership-reasoning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member1Id: partnership.member1.id,
+          member2Id: partnership.member2.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || "Failed to generate reasoning");
+      }
+
+      setAiReasoning({
+        loading: false,
+        error: null,
+        reasoning: data.data.reasoning,
+      });
+    } catch (error) {
+      setAiReasoning({
+        loading: false,
+        error: error instanceof Error ? error.message : "Failed to load AI reasoning",
+        reasoning: null,
+      });
+    }
+  }, [partnership.member1.id, partnership.member2.id, aiReasoning.reasoning, aiReasoning.loading]);
+
+  const handleToggle = () => {
+    if (!expanded && !aiReasoning.reasoning && !aiReasoning.loading) {
+      fetchAIReasoning();
+    }
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div
+      className={cn(
+        "p-4 rounded-xl border bg-gradient-to-r from-background to-muted/30",
+        "hover:shadow-md transition-all duration-200"
+      )}
+    >
+      <div className="flex items-center gap-4">
+        {/* Member 1 */}
+        <Link
+          href={`/team/${partnership.member1.id}`}
+          className="flex-1 flex items-center gap-3 group"
+        >
+          <Avatar className="ring-2 ring-offset-2 ring-domain-executing/20">
+            <AvatarFallback className="bg-domain-executing-light text-domain-executing dark:bg-domain-executing/20 dark:text-domain-executing-muted">
+              {getInitials(partnership.member1.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="font-medium truncate group-hover:text-primary transition-colors">
+              {partnership.member1.name}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {partnership.member1.topTheme}
+            </p>
+          </div>
+        </Link>
+
+        {/* Connection indicator */}
+        <div className="flex flex-col items-center">
+          <Sparkles className="h-4 w-4 text-domain-influencing" />
+          <div className="h-px w-8 bg-gradient-to-r from-domain-executing via-domain-influencing to-domain-relationship my-1" />
+          <span className={cn("text-xs font-medium", getScoreColor(partnership.score))}>
+            {partnership.score}
+          </span>
+        </div>
+
+        {/* Member 2 */}
+        <Link
+          href={`/team/${partnership.member2.id}`}
+          className="flex-1 flex items-center gap-3 justify-end group"
+        >
+          <div className="min-w-0 text-right">
+            <p className="font-medium truncate group-hover:text-primary transition-colors">
+              {partnership.member2.name}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {partnership.member2.topTheme}
+            </p>
+          </div>
+          <Avatar className="ring-2 ring-offset-2 ring-domain-strategic/20">
+            <AvatarFallback className="bg-domain-strategic-light text-domain-strategic dark:bg-domain-strategic/20 dark:text-domain-strategic-muted">
+              {getInitials(partnership.member2.name)}
+            </AvatarFallback>
+          </Avatar>
+        </Link>
+      </div>
+
+      {/* Reason and AI button */}
+      <div className="mt-3 pt-3 border-t border-dashed">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground flex-1">{partnership.reason}</p>
+          <div className="flex items-center gap-2 ml-2">
+            <span
+              className={cn(
+                "text-xs font-medium px-2 py-0.5 rounded-full",
+                {
+                  "bg-domain-strategic-light text-domain-strategic": partnership.score >= 60,
+                  "bg-domain-influencing-light text-domain-influencing":
+                    partnership.score >= 40 && partnership.score < 60,
+                  "bg-domain-relationship-light text-domain-relationship":
+                    partnership.score < 40,
+                }
+              )}
+            >
+              {getScoreLabel(partnership.score)}
+            </span>
+          </div>
+        </div>
+
+        {/* AI Reasoning toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleToggle}
+          className="mt-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+        >
+          <Brain className="h-3 w-3" />
+          {expanded ? "Hide" : "Why this pairing?"}
+          {aiReasoning.loading ? (
+            <Loader2 className="h-3 w-3 animate-spin ml-1" />
+          ) : expanded ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )}
+        </Button>
+
+        {/* Expanded AI reasoning */}
+        {expanded && (
+          <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-dashed">
+            {aiReasoning.loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing partnership dynamics...
+              </div>
+            )}
+            {aiReasoning.error && (
+              <div className="text-sm text-destructive">
+                {aiReasoning.error}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAiReasoning({ loading: false, error: null, reasoning: null });
+                    fetchAIReasoning();
+                  }}
+                  className="ml-2 text-xs"
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+            {aiReasoning.reasoning && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 text-xs font-medium text-domain-strategic">
+                  <Lightbulb className="h-3 w-3" />
+                  AI Partnership Analysis
+                </div>
+                <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {aiReasoning.reasoning}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PartnershipSuggestions({
   partnerships,
   totalPossiblePairings,
@@ -63,9 +262,7 @@ export function PartnershipSuggestions({
       <CardContent>
         {partnerships.length === 0 ? (
           <div className="text-center py-8">
-            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-              <Users className="h-8 w-8 text-muted-foreground" />
-            </div>
+            <Users className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
             <h4 className="font-medium">No Partnerships Yet</h4>
             <p className="text-sm text-muted-foreground mt-1">
               Add more team members with their strengths to see partnership suggestions.
@@ -73,86 +270,11 @@ export function PartnershipSuggestions({
           </div>
         ) : (
           <div className="space-y-4">
-            {displayPartnerships.map((partnership, index) => (
-              <div
+            {displayPartnerships.map((partnership) => (
+              <PartnershipCard
                 key={`${partnership.member1.id}-${partnership.member2.id}`}
-                className={cn(
-                  "p-4 rounded-xl border bg-gradient-to-r from-background to-muted/30",
-                  "hover:shadow-md transition-all duration-200"
-                )}
-              >
-                <div className="flex items-center gap-4">
-                  {/* Member 1 */}
-                  <Link
-                    href={`/team/${partnership.member1.id}`}
-                    className="flex-1 flex items-center gap-3 group"
-                  >
-                    <Avatar className="ring-2 ring-offset-2 ring-domain-executing/20">
-                      <AvatarFallback className="bg-domain-executing-light text-domain-executing">
-                        {getInitials(partnership.member1.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate group-hover:text-primary transition-colors">
-                        {partnership.member1.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {partnership.member1.topTheme}
-                      </p>
-                    </div>
-                  </Link>
-
-                  {/* Connection indicator */}
-                  <div className="flex flex-col items-center">
-                    <Sparkles className="h-4 w-4 text-domain-influencing" />
-                    <div className="h-px w-8 bg-gradient-to-r from-domain-executing via-domain-influencing to-domain-relationship my-1" />
-                    <span className={cn("text-xs font-medium", getScoreColor(partnership.score))}>
-                      {partnership.score}
-                    </span>
-                  </div>
-
-                  {/* Member 2 */}
-                  <Link
-                    href={`/team/${partnership.member2.id}`}
-                    className="flex-1 flex items-center gap-3 justify-end group"
-                  >
-                    <div className="min-w-0 text-right">
-                      <p className="font-medium truncate group-hover:text-primary transition-colors">
-                        {partnership.member2.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {partnership.member2.topTheme}
-                      </p>
-                    </div>
-                    <Avatar className="ring-2 ring-offset-2 ring-domain-strategic/20">
-                      <AvatarFallback className="bg-domain-strategic-light text-domain-strategic">
-                        {getInitials(partnership.member2.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Link>
-                </div>
-
-                {/* Reason */}
-                <div className="mt-3 pt-3 border-t border-dashed">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">{partnership.reason}</p>
-                    <span
-                      className={cn(
-                        "text-xs font-medium px-2 py-0.5 rounded-full",
-                        {
-                          "bg-domain-strategic-light text-domain-strategic": partnership.score >= 60,
-                          "bg-domain-influencing-light text-domain-influencing":
-                            partnership.score >= 40 && partnership.score < 60,
-                          "bg-domain-relationship-light text-domain-relationship":
-                            partnership.score < 40,
-                        }
-                      )}
-                    >
-                      {getScoreLabel(partnership.score)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                partnership={partnership}
+              />
             ))}
 
             {/* Show more button */}

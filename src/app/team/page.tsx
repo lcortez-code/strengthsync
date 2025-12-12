@@ -8,6 +8,8 @@ import { DomainBalanceChart } from "@/components/team/DomainBalanceChart";
 import { ThemeHeatMap } from "@/components/team/ThemeHeatMap";
 import { GapAnalysisCard } from "@/components/team/GapAnalysisCard";
 import { PartnershipSuggestions } from "@/components/team/PartnershipSuggestions";
+import { TeamCanvas } from "@/components/team/TeamCanvas";
+import { ProjectPartnerFinder } from "@/components/team/ProjectPartnerFinder";
 import { DomainIcon } from "@/components/strengths/DomainIcon";
 import {
   Users,
@@ -19,6 +21,7 @@ import {
   Upload,
   UserPlus,
   Download,
+  LayoutGrid,
 } from "lucide-react";
 import Link from "next/link";
 import type { DomainSlug } from "@/constants/strengths-data";
@@ -77,7 +80,7 @@ interface PartnershipsData {
   totalPossiblePairings: number;
 }
 
-type TabType = "overview" | "themes" | "gaps" | "partnerships";
+type TabType = "overview" | "canvas" | "themes" | "gaps" | "partnerships";
 
 export default function TeamPage() {
   const { data: session } = useSession();
@@ -127,6 +130,7 @@ export default function TeamPage() {
 
   const tabs = [
     { id: "overview" as const, label: "Overview", icon: PieChart },
+    { id: "canvas" as const, label: "Team Canvas", icon: LayoutGrid },
     { id: "themes" as const, label: "Themes", icon: TrendingUp },
     { id: "gaps" as const, label: "Gap Analysis", icon: AlertCircle },
     { id: "partnerships" as const, label: "Partnerships", icon: Handshake },
@@ -168,9 +172,7 @@ export default function TeamPage() {
         <Card variant="influencing">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-destructive" />
-              </div>
+              <AlertCircle className="h-6 w-6 text-destructive" />
               <div className="flex-1">
                 <h3 className="font-medium">Failed to load analytics</h3>
                 <p className="text-sm text-muted-foreground">{error}</p>
@@ -205,7 +207,7 @@ export default function TeamPage() {
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
-              <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10 hidden group-hover:block">
+              <div className="absolute right-0 mt-1 w-48 bg-card border rounded-lg shadow-lg z-10 hidden group-hover:block">
                 <a
                   href="/api/export/team?format=csv"
                   className="block px-4 py-2 text-sm hover:bg-muted"
@@ -245,9 +247,7 @@ export default function TeamPage() {
         <Card className="border-dashed">
           <CardContent className="pt-6">
             <div className="text-center py-12">
-              <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
-                <Users className="h-10 w-10 text-muted-foreground" />
-              </div>
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-6" />
               <h3 className="text-xl font-semibold mb-2">No Strength Data Yet</h3>
               <p className="text-muted-foreground max-w-md mx-auto mb-6">
                 Upload CliftonStrengths reports for your team members to see analytics,
@@ -281,9 +281,7 @@ export default function TeamPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Users className="h-6 w-6 text-primary" />
-                  </div>
+                  <Users className="h-6 w-6 text-primary" />
                   <div>
                     <p className="text-sm text-muted-foreground">Team Members</p>
                     <p className="text-2xl font-bold">{composition.totalMembers}</p>
@@ -295,9 +293,7 @@ export default function TeamPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-domain-strategic-light flex items-center justify-center">
-                    <TrendingUp className="h-6 w-6 text-domain-strategic" />
-                  </div>
+                  <TrendingUp className="h-6 w-6 text-domain-strategic" />
                   <div>
                     <p className="text-sm text-muted-foreground">With Strengths</p>
                     <p className="text-2xl font-bold">{composition.membersWithStrengths}</p>
@@ -309,9 +305,7 @@ export default function TeamPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-domain-influencing-light flex items-center justify-center">
-                    <AlertCircle className="h-6 w-6 text-domain-influencing" />
-                  </div>
+                  <AlertCircle className="h-6 w-6 text-domain-influencing" />
                   <div>
                     <p className="text-sm text-muted-foreground">Theme Gaps</p>
                     <p className="text-2xl font-bold">{gaps?.missingThemes.length || 0}</p>
@@ -323,9 +317,7 @@ export default function TeamPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-domain-relationship-light flex items-center justify-center">
-                    <Handshake className="h-6 w-6 text-domain-relationship" />
-                  </div>
+                  <Handshake className="h-6 w-6 text-domain-relationship" />
                   <div>
                     <p className="text-sm text-muted-foreground">Partnerships</p>
                     <p className="text-2xl font-bold">{partnerships?.partnerships.length || 0}</p>
@@ -377,7 +369,7 @@ export default function TeamPage() {
                         <span className="text-sm text-muted-foreground w-6">
                           #{index + 1}
                         </span>
-                        <DomainIcon domain={theme.domain} size="sm" withBackground />
+                        <DomainIcon domain={theme.domain} size="sm" />
                         <span className="flex-1 font-medium">{theme.name}</span>
                         <span className="text-sm text-muted-foreground">
                           {theme.count} ({theme.percentage}%)
@@ -397,16 +389,29 @@ export default function TeamPage() {
             />
           )}
 
+          {activeTab === "canvas" && composition && (
+            <TeamCanvas
+              teamName={session?.user?.organizationName || "Your Team"}
+              totalMembers={composition.totalMembers}
+              membersWithStrengths={composition.membersWithStrengths}
+              themeCoverage={composition.themeFrequency}
+              domainComposition={composition.domainComposition}
+            />
+          )}
+
           {activeTab === "gaps" && gaps && (
             <GapAnalysisCard data={gaps} totalMembers={gaps.totalMembers} />
           )}
 
           {activeTab === "partnerships" && partnerships && (
-            <PartnershipSuggestions
-              partnerships={partnerships.partnerships}
-              totalPossiblePairings={partnerships.totalPossiblePairings}
-              showAll
-            />
+            <div className="space-y-6">
+              <ProjectPartnerFinder />
+              <PartnershipSuggestions
+                partnerships={partnerships.partnerships}
+                totalPossiblePairings={partnerships.totalPossiblePairings}
+                showAll
+              />
+            </div>
           )}
         </>
       )}

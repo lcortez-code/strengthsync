@@ -75,7 +75,7 @@ export function StrengthsCard({
         <div className="flex items-start gap-4">
           <Avatar size="xl" ring={dominantDomain}>
             <AvatarImage src={avatarUrl || undefined} alt={name} />
-            <AvatarFallback>{getInitials(name)}</AvatarFallback>
+            <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(name)}</AvatarFallback>
           </Avatar>
 
           <div className="flex-1 min-w-0">
@@ -180,7 +180,7 @@ export function StrengthsCardMini({
       <div className="flex items-center gap-3">
         <Avatar size="default" ring={dominantDomain}>
           <AvatarImage src={avatarUrl || undefined} alt={name} />
-          <AvatarFallback>{getInitials(name)}</AvatarFallback>
+          <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(name)}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{name}</p>
