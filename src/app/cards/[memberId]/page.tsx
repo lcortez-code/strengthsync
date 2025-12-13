@@ -158,7 +158,7 @@ export default function StrengthsCardPage({
   const primaryDomain = cardData.primaryDomain.slug as DomainSlug;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
@@ -181,7 +181,7 @@ export default function StrengthsCardPage({
         <div
           ref={cardRef}
           className={cn(
-            "relative w-80 aspect-[2.5/3.5] rounded-2xl shadow-2xl overflow-hidden cursor-pointer transition-transform duration-500",
+            "relative w-80 aspect-[2.5/4] rounded-2xl shadow-2xl overflow-hidden cursor-pointer transition-transform duration-500",
             showBack && "rotate-y-180"
           )}
           onClick={() => setShowBack(!showBack)}
@@ -296,12 +296,12 @@ export default function StrengthsCardPage({
           {/* Back of Card */}
           <div
             className={cn(
-              "absolute inset-0 rounded-2xl overflow-hidden bg-white",
+              "absolute inset-0 rounded-2xl overflow-hidden bg-card border border-border",
               !showBack && "opacity-0"
             )}
           >
             <div className="h-full flex flex-col p-6">
-              <h3 className="text-lg font-bold mb-4 text-center">All 34 Strengths</h3>
+              <h3 className="text-lg font-bold mb-4 text-center text-foreground">All 34 Strengths</h3>
               <div className="flex-1 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-1 text-xs">
                   {cardData.allStrengths.map((strength) => (
@@ -316,7 +316,7 @@ export default function StrengthsCardPage({
                         domain={strength.domain as DomainSlug}
                         size="sm"
                       />
-                      <span className="truncate">{strength.name}</span>
+                      <span className="truncate text-foreground">{strength.name}</span>
                     </div>
                   ))}
                 </div>
@@ -332,7 +332,7 @@ export default function StrengthsCardPage({
         <div className="flex-1 max-w-md space-y-6">
           <div>
             <h1 className="text-2xl font-bold">{cardData.name}&apos;s Card</h1>
-            <p className="text-muted-foreground">
+            <p className="text-lg text-muted-foreground">
               Digital strengths profile card
             </p>
           </div>

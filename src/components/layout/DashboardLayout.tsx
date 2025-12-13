@@ -9,7 +9,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { getInitials } from "@/lib/utils";
 import {
-  Sparkles,
   LayoutDashboard,
   Users,
   Search,
@@ -31,9 +30,11 @@ import {
   ClipboardList,
   Database,
   Bot,
+  Sparkles,
 } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Logo } from "@/components/brand/Logo";
 
 // Navigation organized by user workflow (CliftonStrengths journey)
 const navigationSections = [
@@ -48,14 +49,15 @@ const navigationSections = [
     items: [
       { name: "My Strengths", href: "/strengths", icon: Sparkles },
       { name: "My Reviews", href: "/reviews", icon: ClipboardList },
-      { name: "My Card", href: "/cards", icon: CreditCard },
+      { name: "Mentorship", href: "/mentorship", icon: Heart },
     ],
   },
   {
     label: "Team",
     items: [
+      { name: "Ask AI", href: "/chat", icon: Bot },
       { name: "Team Analytics", href: "/team", icon: Users },
-      { name: "Directory", href: "/directory", icon: Search },
+      { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
     ],
   },
   {
@@ -64,15 +66,7 @@ const navigationSections = [
       { name: "Feed", href: "/feed", icon: Rss },
       { name: "Shoutouts", href: "/shoutouts", icon: MessageSquare },
       { name: "Skill Marketplace", href: "/marketplace", icon: ShoppingBag },
-      { name: "Mentorship", href: "/mentorship", icon: Heart },
-    ],
-  },
-  {
-    label: "Grow",
-    items: [
-      { name: "AI Coach", href: "/chat", icon: Bot },
       { name: "Challenges", href: "/challenges", icon: Gamepad2 },
-      { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
     ],
   },
 ];
@@ -131,9 +125,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 h-16 px-4 border-b border-border/50 flex-shrink-0">
-          <Sparkles className="h-6 w-6 text-primary" />
-          <span className="font-display font-bold text-lg">StrengthSync</span>
+        <div className="flex items-center h-16 px-4 border-b border-border/50 flex-shrink-0">
+          <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <Logo size="default" showText />
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="ml-auto lg:hidden p-1.5 rounded-lg hover:bg-muted"
@@ -237,6 +232,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {userMenuOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 p-1 bg-card border border-border rounded-xl shadow-soft-lg dark:shadow-soft-lg-dark">
                 <Link
+                  href="/cards"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-muted"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  My Card
+                </Link>
+                <Link
+                  href="/directory"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-muted"
+                >
+                  <Search className="h-4 w-4" />
+                  Directory
+                </Link>
+                <Link
                   href="/settings/profile"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-muted"
@@ -293,7 +304,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className="p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="px-4 pt-2 pb-4 md:px-6 md:pt-4 md:pb-6 lg:px-8 lg:pt-4 lg:pb-8">{children}</main>
       </div>
     </div>
   );

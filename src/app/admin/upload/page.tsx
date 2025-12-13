@@ -232,7 +232,7 @@ export default function UploadPage() {
 
   if (!isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-12">
+      <div className="max-w-7xl mx-auto text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
         <h1 className="font-display text-2xl font-bold mb-2">Access Denied</h1>
         <p className="text-muted-foreground">
@@ -243,7 +243,7 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       <div>
         <h1 className="font-display text-3xl font-bold">Upload CliftonStrengths</h1>
         <p className="text-muted-foreground mt-1">

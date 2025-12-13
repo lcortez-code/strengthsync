@@ -73,15 +73,24 @@ export default function CardsGalleryPage() {
     }
   };
 
-  const filteredMembers = members.filter(
-    (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.jobTitle?.toLowerCase().includes(search.toLowerCase()) ||
-      m.department?.toLowerCase().includes(search.toLowerCase()) ||
-      m.topStrengths.some((s) =>
-        s.themeName.toLowerCase().includes(search.toLowerCase())
-      )
-  );
+  const filteredMembers = members
+    .filter(
+      (m) =>
+        m.name.toLowerCase().includes(search.toLowerCase()) ||
+        m.jobTitle?.toLowerCase().includes(search.toLowerCase()) ||
+        m.department?.toLowerCase().includes(search.toLowerCase()) ||
+        m.topStrengths.some((s) =>
+          s.themeName.toLowerCase().includes(search.toLowerCase())
+        )
+    )
+    .sort((a, b) => {
+      // Current user's card always comes first
+      const aIsCurrentUser = a.id === session?.user?.memberId;
+      const bIsCurrentUser = b.id === session?.user?.memberId;
+      if (aIsCurrentUser && !bIsCurrentUser) return -1;
+      if (!aIsCurrentUser && bIsCurrentUser) return 1;
+      return 0;
+    });
 
   const getPrimaryDomain = (member: Member): DomainSlug => {
     if (member.topStrengths.length === 0) return "strategic";
@@ -94,7 +103,7 @@ export default function CardsGalleryPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

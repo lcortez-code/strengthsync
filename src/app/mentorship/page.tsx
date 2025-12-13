@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import { DomainIcon } from "@/components/strengths/DomainIcon";
 import { ThemeBadge } from "@/components/strengths/ThemeBadge";
@@ -27,6 +28,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Check,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
@@ -47,6 +50,7 @@ interface Mentorship {
   status: string;
   focusAreas: string[];
   notes: string | null;
+  guide: MentorshipGuide | null;
   startedAt: string;
   endedAt: string | null;
   mentor: {
@@ -112,14 +116,14 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "ACTIVE":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic bg-domain-strategic-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic-dark bg-domain-strategic-light dark:bg-domain-strategic/20 dark:text-domain-strategic px-2 py-0.5 rounded-full">
           <CheckCircle2 className="h-3 w-3" />
           Active
         </span>
       );
     case "PENDING":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-influencing bg-domain-influencing-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-influencing-dark bg-domain-influencing-light dark:bg-domain-influencing/20 dark:text-domain-influencing px-2 py-0.5 rounded-full">
           <Clock className="h-3 w-3" />
           Pending
         </span>
@@ -130,12 +134,13 @@ function getStatusBadge(status: string) {
 }
 
 // AI Mentorship Guide Panel component
-function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
-  const [expanded, setExpanded] = useState(false);
+function MentorshipGuidePanel({ mentorship, onGuideGenerated }: { mentorship: Mentorship; onGuideGenerated?: (guide: MentorshipGuide) => void }) {
+  // Expanded by default if no guide exists, collapsed if guide exists
+  const [expanded, setExpanded] = useState(!mentorship.guide);
   const [aiGuide, setAiGuide] = useState<AIGuideState>({
     loading: false,
     error: null,
-    guide: null,
+    guide: mentorship.guide, // Initialize with saved guide if available
   });
 
   const fetchGuide = useCallback(async () => {
@@ -148,6 +153,7 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mentorshipId: mentorship.id,
           mentorId: mentorship.mentor.id,
           menteeId: mentorship.mentee.id,
           focusThemes: mentorship.focusAreas,
@@ -161,11 +167,13 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
         throw new Error(data.error?.message || "Failed to generate guide");
       }
 
+      const generatedGuide = data.data.guide;
       setAiGuide({
         loading: false,
         error: null,
-        guide: data.data.guide,
+        guide: generatedGuide,
       });
+      onGuideGenerated?.(generatedGuide);
     } catch (error) {
       setAiGuide({
         loading: false,
@@ -173,13 +181,14 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
         guide: null,
       });
     }
-  }, [mentorship.mentor.id, mentorship.mentee.id, mentorship.focusAreas, aiGuide.guide, aiGuide.loading]);
+  }, [mentorship.id, mentorship.mentor.id, mentorship.mentee.id, mentorship.focusAreas, aiGuide.guide, aiGuide.loading, onGuideGenerated]);
 
   const handleToggle = () => {
-    if (!expanded && !aiGuide.guide && !aiGuide.loading) {
-      fetchGuide();
-    }
     setExpanded(!expanded);
+  };
+
+  const handleGenerateGuide = () => {
+    fetchGuide();
   };
 
   return (
@@ -205,6 +214,41 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
 
       {expanded && (
         <div className="mt-4 space-y-4">
+          {/* Show generate button when no guide exists */}
+          {!aiGuide.guide && !aiGuide.loading && !aiGuide.error && (
+            <div className="text-center py-6">
+              <Brain className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Get personalized guidance for your mentorship based on both of your strengths profiles.
+              </p>
+              <Button
+                variant="strategic"
+                size="sm"
+                onClick={handleGenerateGuide}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate AI Guide
+              </Button>
+            </div>
+          )}
+
+          {/* Show regenerate button when guide exists */}
+          {aiGuide.guide && !aiGuide.loading && (
+            <div className="flex justify-end mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAiGuide((prev) => ({ ...prev, guide: null }));
+                }}
+                className="text-xs text-muted-foreground"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Regenerate Guide
+              </Button>
+            </div>
+          )}
+
           {aiGuide.loading && (
             <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -236,7 +280,7 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
           {aiGuide.guide && (
             <div className="space-y-6">
               {/* Overview */}
-              <div className="p-4 rounded-lg bg-domain-strategic-light/30 border border-domain-strategic/20">
+              <div className="p-4 rounded-lg bg-domain-strategic-light/30 dark:bg-domain-strategic/20 border border-domain-strategic/20 dark:border-domain-strategic/30">
                 <div className="flex items-center gap-2 text-domain-strategic font-medium mb-2">
                   <Lightbulb className="h-4 w-4" />
                   Overview
@@ -257,10 +301,10 @@ function MentorshipGuidePanel({ mentorship }: { mentorship: Mentorship }) {
                         <div className="font-medium text-sm mb-1">{area.area}</div>
                         <p className="text-xs text-muted-foreground mb-2">{area.description}</p>
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <span className="bg-domain-executing-light text-domain-executing px-2 py-0.5 rounded">
+                          <span className="bg-domain-executing-light dark:bg-domain-executing/20 text-domain-executing-dark dark:text-domain-executing px-2 py-0.5 rounded">
                             Mentor: {area.mentorStrength}
                           </span>
-                          <span className="bg-domain-relationship-light text-domain-relationship px-2 py-0.5 rounded">
+                          <span className="bg-domain-relationship-light dark:bg-domain-relationship/20 text-domain-relationship-dark dark:text-domain-relationship px-2 py-0.5 rounded">
                             Goal: {area.menteeGoal}
                           </span>
                         </div>
@@ -373,6 +417,12 @@ export default function MentorshipPage() {
   const [mentorships, setMentorships] = useState<Mentorship[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSuggestions, setLoadingSuggestions] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [declineDialog, setDeclineDialog] = useState<{
+    open: boolean;
+    mentorshipId: string;
+    menteeName: string;
+  }>({ open: false, mentorshipId: "", menteeName: "" });
 
   useEffect(() => {
     fetchData();
@@ -405,11 +455,35 @@ export default function MentorshipPage() {
     }
   };
 
+  const handleMentorshipAction = async (mentorshipId: string, action: "accept" | "decline") => {
+    setProcessingId(mentorshipId);
+    try {
+      const res = await fetch(`/api/mentorship/${mentorshipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+
+      if (res.ok) {
+        // Refresh data after action
+        await fetchData();
+      } else {
+        const data = await res.json();
+        console.error("Failed to process action:", data.error?.message);
+      }
+    } catch (err) {
+      console.error("Failed to process mentorship action:", err);
+    } finally {
+      setProcessingId(null);
+      setDeclineDialog({ open: false, mentorshipId: "", menteeName: "" });
+    }
+  };
+
   const activeMentorships = mentorships.filter((m) => m.status === "ACTIVE");
   const pendingMentorships = mentorships.filter((m) => m.status === "PENDING");
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -446,9 +520,9 @@ export default function MentorshipPage() {
                 <Card key={mentorship.id} className="overflow-hidden">
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
-                      <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/20">
+                      <Avatar className="h-14 w-14">
                         <AvatarImage src={otherPerson.avatarUrl || undefined} />
-                        <AvatarFallback className="bg-domain-relationship-light text-domain-relationship dark:bg-domain-relationship/20 dark:text-domain-relationship-muted">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
                           {getInitials(otherPerson.name || "?")}
                         </AvatarFallback>
                       </Avatar>
@@ -495,6 +569,50 @@ export default function MentorshipPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Accept/Decline buttons for pending requests where user is mentor */}
+                    {mentorship.status === "PENDING" && mentorship.isMentor && (
+                      <div className="mt-4 pt-4 border-t flex gap-2">
+                        <Button
+                          variant="strategic"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleMentorshipAction(mentorship.id, "accept")}
+                          disabled={processingId === mentorship.id}
+                        >
+                          {processingId === mentorship.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <Check className="h-4 w-4 mr-2" />
+                          )}
+                          Accept
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setDeclineDialog({
+                            open: true,
+                            mentorshipId: mentorship.id,
+                            menteeName: mentorship.mentee.name,
+                          })}
+                          disabled={processingId === mentorship.id}
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Decline
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Waiting message for mentees with pending requests */}
+                    {mentorship.status === "PENDING" && !mentorship.isMentor && (
+                      <div className="mt-4 pt-4 border-t">
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          Waiting for {mentorship.mentor.name} to respond
+                        </p>
+                      </div>
+                    )}
 
                     {/* AI Guide Panel for active mentorships */}
                     {mentorship.status === "ACTIVE" && (
@@ -546,7 +664,7 @@ export default function MentorshipPage() {
               >
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4 mb-4">
-                    <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-primary/10">
+                    <Avatar className="h-14 w-14">
                       <AvatarImage src={suggestion.avatarUrl || undefined} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(suggestion.name)}
@@ -680,6 +798,19 @@ export default function MentorshipPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Decline Confirmation Dialog */}
+      <ConfirmDialog
+        open={declineDialog.open}
+        onOpenChange={(open) => setDeclineDialog((prev) => ({ ...prev, open }))}
+        title="Decline Mentorship Request"
+        description={`Are you sure you want to decline the mentorship request from ${declineDialog.menteeName}?`}
+        confirmLabel="Decline"
+        cancelLabel="Cancel"
+        onConfirm={() => handleMentorshipAction(declineDialog.mentorshipId, "decline")}
+        variant="warning"
+        isLoading={processingId === declineDialog.mentorshipId}
+      />
     </div>
   );
 }

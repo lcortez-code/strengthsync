@@ -160,7 +160,7 @@ export default function MemberProfilePage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -178,7 +178,7 @@ export default function MemberProfilePage() {
 
   if (error || !member) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -202,7 +202,7 @@ export default function MemberProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Back button */}
       <Button variant="ghost" onClick={() => router.back()}>
         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -244,7 +244,7 @@ export default function MemberProfilePage() {
                 </div>
 
                 {!isOwnProfile && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mt-2">
                     <Button variant="outline" size="sm" asChild>
                       <a href={`mailto:${member.user.email}`}>
                         <Mail className="h-4 w-4 mr-2" />
@@ -509,7 +509,7 @@ export default function MemberProfilePage() {
                       className="flex items-start gap-4 p-4 rounded-xl bg-muted/30"
                     >
                       <Avatar>
-                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
                           {getInitials(shoutout.giver.user.name)}
                         </AvatarFallback>
                       </Avatar>

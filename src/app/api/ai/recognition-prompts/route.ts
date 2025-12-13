@@ -11,20 +11,19 @@ const recognitionPromptsSchema = z.object({
   limit: z.number().min(1).max(5).optional().default(3),
 });
 
-// Structured output for recognition prompts
+// Structured output for recognition prompts - made more lenient
 const recognitionPromptsOutputSchema = z.object({
   suggestions: z.array(
     z.object({
-      memberId: z.string(),
-      memberName: z.string(),
+      memberId: z.string().describe("The exact member ID from the candidates list"),
+      memberName: z.string().describe("The member's name"),
       recognitionReason: z.string().describe("Why to recognize this person (2-3 sentences)"),
       suggestedTheme: z.string().describe("Which CliftonStrength theme to highlight"),
       shoutoutStarter: z.string().describe("A ready-to-use shoutout message starter (1-2 sentences)"),
       context: z.string().describe("What specific behavior or contribution to recognize"),
     })
-  ),
-  noSuggestionsReason: z.string().optional(),
-});
+  ).describe("Array of recognition suggestions"),
+}).describe("Recognition suggestions for team members");
 
 export async function POST(request: NextRequest) {
   try {
@@ -233,10 +232,11 @@ For each suggestion:
 
     if (!result.success) {
       console.error("[AI Recognition Prompts] Generation failed:", result.error);
-      return apiError(
-        ApiErrorCode.INTERNAL_ERROR,
-        result.error || "Failed to generate recognition suggestions"
-      );
+      // Return empty suggestions as fallback instead of error
+      return apiSuccess({
+        suggestions: [],
+        noSuggestionsReason: "AI couldn't generate suggestions at this time. Please try again later.",
+      });
     }
 
     // Enrich with member avatars/details

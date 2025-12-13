@@ -88,7 +88,7 @@ export default function LeaderboardPage() {
   const memberId = session?.user?.memberId;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -154,14 +154,14 @@ export default function LeaderboardPage() {
           ))}
         </div>
       ) : leaderboard.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {leaderboard.map((entry) => (
-            <Link key={entry.id} href={`/team/${entry.id}`}>
+            <Link key={entry.id} href={`/team/${entry.id}`} className="block">
               <Card
                 className={cn(
                   "transition-all hover:shadow-md",
                   getRankStyle(entry.rank),
-                  entry.id === memberId && "ring-2 ring-primary ring-offset-2"
+                  entry.id === memberId && "ring-2 ring-primary"
                 )}
               >
                 <CardContent className="pt-6">
@@ -176,20 +176,9 @@ export default function LeaderboardPage() {
                     </div>
 
                     {/* Avatar */}
-                    <Avatar className={cn(
-                      "h-14 w-14 ring-2 ring-offset-2",
-                      entry.rank === 1 ? "ring-amber-400" :
-                      entry.rank === 2 ? "ring-slate-400" :
-                      entry.rank === 3 ? "ring-orange-400" :
-                      "ring-primary/20"
-                    )}>
+                    <Avatar size="lg">
                       <AvatarImage src={entry.avatarUrl || undefined} />
-                      <AvatarFallback className={cn(
-                        entry.rank === 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                        entry.rank === 2 ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
-                        entry.rank === 3 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
-                        "bg-muted dark:bg-muted/50"
-                      )}>
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(entry.name)}
                       </AvatarFallback>
                     </Avatar>

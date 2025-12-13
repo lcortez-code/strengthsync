@@ -7,7 +7,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
-import { Sparkles, Mail, Lock, User, Building2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, User, Building2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -110,9 +111,8 @@ export default function RegisterPage() {
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Sparkles className="h-8 w-8 text-primary" />
-          <span className="font-display font-bold text-2xl">StrengthSync</span>
+        <div className="flex items-center justify-center mb-8">
+          <Logo size="lg" showText />
         </div>
 
         <Card className="shadow-soft-lg dark:shadow-soft-lg-dark">

@@ -310,7 +310,7 @@ export default function CreateShoutoutPage() {
 
   if (success) {
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card className="overflow-hidden">
           <CardContent className="pt-6">
             <div className="text-center py-12">
@@ -337,7 +337,7 @@ export default function CreateShoutoutPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
@@ -370,7 +370,7 @@ export default function CreateShoutoutPage() {
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12">
                   <AvatarImage src={selectedMember.avatarUrl || undefined} />
-                  <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
+                  <AvatarFallback className="bg-primary text-primary-foreground">
                     {getInitials(selectedMember.name)}
                   </AvatarFallback>
                 </Avatar>

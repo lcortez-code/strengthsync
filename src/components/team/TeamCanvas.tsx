@@ -168,15 +168,15 @@ export function TeamCanvas({
                 <span>No coverage</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-amber-100 border border-amber-300" />
+                <div className="w-4 h-4 rounded bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700" />
                 <span>1 person</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-blue-100 border border-blue-300" />
+                <div className="w-4 h-4 rounded bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700" />
                 <span>2 people</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-green-100 border border-green-300" />
+                <div className="w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700" />
                 <span>3+ people</span>
               </div>
             </div>
@@ -212,9 +212,9 @@ export function TeamCanvas({
                               className={cn(
                                 "p-2 rounded-lg text-center cursor-default transition-all",
                                 level === "none" && "bg-muted border-2 border-dashed border-muted-foreground/30 text-muted-foreground",
-                                level === "low" && "bg-amber-100 border border-amber-300 text-amber-800",
-                                level === "medium" && "bg-blue-100 border border-blue-300 text-blue-800",
-                                level === "high" && "bg-green-100 border border-green-300 text-green-800",
+                                level === "low" && "bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300",
+                                level === "medium" && "bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300",
+                                level === "high" && "bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 text-green-800 dark:text-green-300",
                                 isHovered && "ring-2 ring-primary ring-offset-2"
                               )}
                             >

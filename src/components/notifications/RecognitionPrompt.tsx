@@ -64,8 +64,8 @@ function SuggestionCard({
   return (
     <div className="p-4 rounded-xl border bg-gradient-to-br from-background to-muted/20 hover:shadow-md transition-all">
       <div className="flex items-start gap-3">
-        <Avatar className="h-12 w-12 ring-2 ring-offset-2 ring-domain-influencing/20">
-          <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted font-semibold">
+        <Avatar className="h-12 w-12">
+          <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
             {getInitials(suggestion.memberName)}
           </AvatarFallback>
         </Avatar>
@@ -95,8 +95,8 @@ function SuggestionCard({
       </div>
 
       {/* Recognition reason */}
-      <div className="mt-3 p-3 rounded-lg bg-domain-strategic-light/30 border border-domain-strategic/10">
-        <p className="text-sm text-muted-foreground">
+      <div className="mt-3 p-3 rounded-lg bg-domain-strategic-light/30 dark:bg-domain-strategic/20 border border-domain-strategic/10 dark:border-domain-strategic/40">
+        <p className="text-sm text-foreground/80 dark:text-foreground/90">
           <span className="font-medium text-foreground">Why recognize:</span>{" "}
           {suggestion.recognitionReason}
         </p>
@@ -111,7 +111,7 @@ function SuggestionCard({
       )}
 
       {/* Shoutout starter */}
-      <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-dashed">
+      <div className="mt-3 p-3 rounded-lg bg-muted/50 dark:bg-muted/30 border border-dashed border-muted-foreground/20">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-muted-foreground">Ready-to-use shoutout:</span>
           <Button

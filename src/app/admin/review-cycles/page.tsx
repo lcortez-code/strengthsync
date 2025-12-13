@@ -242,7 +242,7 @@ export default function AdminReviewCyclesPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

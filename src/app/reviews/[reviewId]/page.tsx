@@ -364,7 +364,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ reviewI
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
           <div className="h-40 bg-muted rounded" />
@@ -376,7 +376,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ reviewI
 
   if (!review) {
     return (
-      <div className="max-w-4xl mx-auto p-6 text-center">
+      <div className="max-w-7xl mx-auto p-6 text-center">
         <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-lg font-medium">Review not found</h2>
         <Link href="/reviews">
@@ -400,7 +400,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ reviewI
     review.status === "MANAGER_REVIEW";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

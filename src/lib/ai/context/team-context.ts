@@ -20,6 +20,7 @@ export interface TeamMemberSummary {
   name: string;
   jobTitle?: string;
   topStrengths: string[];
+  allStrengths: { name: string; rank: number; domain: string }[];
   dominantDomain: string | null;
 }
 
@@ -59,7 +60,6 @@ export async function buildTeamContext(organizationId: string): Promise<TeamCont
             select: { fullName: true, jobTitle: true },
           },
           strengths: {
-            where: { rank: { lte: 5 } },
             include: {
               theme: {
                 include: {
@@ -97,32 +97,42 @@ export async function buildTeamContext(organizationId: string): Promise<TeamCont
 
     const memberDomainCounts: Record<string, number> = {};
     const topStrengths: string[] = [];
+    const allStrengths: { name: string; rank: number; domain: string }[] = [];
 
     for (const strength of member.strengths) {
       const domainName = strength.theme.domain.name;
       const domainSlug = strength.theme.domain.slug;
       const themeName = strength.theme.name;
 
-      // Count domains
-      if (!domainCounts[domainSlug]) {
-        domainCounts[domainSlug] = { count: 0, members: [] };
-      }
-      domainCounts[domainSlug].count++;
-      if (!domainCounts[domainSlug].members.includes(member.user.fullName)) {
-        domainCounts[domainSlug].members.push(member.user.fullName);
-      }
-      memberDomainCounts[domainName] = (memberDomainCounts[domainName] || 0) + 1;
+      // Count domains (only for top 5 for distribution analysis)
+      if (strength.rank <= 5) {
+        if (!domainCounts[domainSlug]) {
+          domainCounts[domainSlug] = { count: 0, members: [] };
+        }
+        domainCounts[domainSlug].count++;
+        if (!domainCounts[domainSlug].members.includes(member.user.fullName)) {
+          domainCounts[domainSlug].members.push(member.user.fullName);
+        }
+        memberDomainCounts[domainName] = (memberDomainCounts[domainName] || 0) + 1;
 
-      // Count themes
-      if (!themeCounts[themeName]) {
-        themeCounts[themeName] = { domain: domainName, count: 0, members: [] };
-      }
-      themeCounts[themeName].count++;
-      if (!themeCounts[themeName].members.includes(member.user.fullName)) {
-        themeCounts[themeName].members.push(member.user.fullName);
+        // Count themes (only top 5 for team analysis)
+        if (!themeCounts[themeName]) {
+          themeCounts[themeName] = { domain: domainName, count: 0, members: [] };
+        }
+        themeCounts[themeName].count++;
+        if (!themeCounts[themeName].members.includes(member.user.fullName)) {
+          themeCounts[themeName].members.push(member.user.fullName);
+        }
+
+        topStrengths.push(themeName);
       }
 
-      topStrengths.push(themeName);
+      // Add all strengths with full details
+      allStrengths.push({
+        name: themeName,
+        rank: strength.rank,
+        domain: domainName,
+      });
     }
 
     // Determine dominant domain for member
@@ -134,6 +144,7 @@ export async function buildTeamContext(organizationId: string): Promise<TeamCont
       name: member.user.fullName,
       jobTitle: member.user.jobTitle || undefined,
       topStrengths,
+      allStrengths,
       dominantDomain,
     });
   }
@@ -365,6 +376,11 @@ export async function getMembersWithStrengths(
       name: m.user.fullName,
       jobTitle: m.user.jobTitle || undefined,
       topStrengths: m.strengths.map((s) => s.theme.name),
+      allStrengths: m.strengths.map((s) => ({
+        name: s.theme.name,
+        rank: s.rank,
+        domain: s.theme.domain.name,
+      })),
       dominantDomain: Object.entries(domainCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
     };
   });

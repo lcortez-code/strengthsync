@@ -122,7 +122,7 @@ export default function DirectoryPage() {
     : THEMES;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -139,7 +139,7 @@ export default function DirectoryPage() {
 
       {/* Search and filters */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-2">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search input */}
             <div className="flex-1 relative">
@@ -280,7 +280,7 @@ export default function DirectoryPage() {
                 >
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
-                      <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-primary/10">
+                      <Avatar className="h-14 w-14">
                         <AvatarImage src={member.avatarUrl || undefined} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
                           {getInitials(member.name)}

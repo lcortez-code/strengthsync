@@ -138,7 +138,7 @@ export default function TeamPage() {
 
   if (loading) {
     return (
-      <div className="space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold">Team Analytics</h1>
@@ -164,7 +164,7 @@ export default function TeamPage() {
 
   if (error) {
     return (
-      <div className="space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         <div>
           <h1 className="font-display text-3xl font-bold">Team Analytics</h1>
           <p className="text-muted-foreground mt-1">Understand your team&apos;s strengths</p>
@@ -191,7 +191,7 @@ export default function TeamPage() {
   const noData = !composition || composition.membersWithStrengths === 0;
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

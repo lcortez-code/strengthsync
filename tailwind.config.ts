@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
   darkMode: ["class"],
@@ -107,6 +108,7 @@ const config: Config = {
         wiggle: "wiggle 0.3s ease-in-out",
         bounce: "bounce 0.5s ease-in-out",
         confetti: "confetti 0.5s ease-out forwards",
+        "spin-slow": "spin 3s linear infinite",
       },
       keyframes: {
         fadeIn: {
@@ -172,7 +174,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [typography],
 };
 
 export default config;

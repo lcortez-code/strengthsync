@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
       status: m.status,
       focusAreas: m.focusAreas,
       notes: m.notes,
+      guide: m.guide,
       startedAt: m.startedAt.toISOString(),
       endedAt: m.endedAt?.toISOString(),
       mentor: {

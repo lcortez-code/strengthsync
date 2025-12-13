@@ -9,7 +9,6 @@ import {
   Search,
   Trophy,
   MessageSquare,
-  Sparkles,
   ArrowRight,
   Zap,
   Heart,
@@ -18,6 +17,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 
 const FEATURED_THEMES = [
   { name: "Strategic", domain: "strategic" as const },
@@ -72,10 +72,9 @@ export default function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              <span className="font-display font-bold text-xl">StrengthSync</span>
-            </div>
+            <Link href="/" className="hover:opacity-90 transition-opacity">
+              <Logo size="default" showText />
+            </Link>
             <div className="flex items-center gap-3">
               <Button variant="ghost" asChild>
                 <Link href="/auth/login">Sign in</Link>
@@ -272,10 +271,7 @@ export default function LandingPage() {
       <footer className="py-12 px-4 sm:px-6 lg:px-8 border-t border-border/50">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <span className="font-display font-semibold">StrengthSync</span>
-            </div>
+            <Logo size="sm" showText />
             <p className="text-sm text-muted-foreground">
               CliftonStrengths is a trademark of Gallup, Inc.
             </p>
