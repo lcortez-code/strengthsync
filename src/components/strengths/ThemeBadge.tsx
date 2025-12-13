@@ -11,13 +11,13 @@ const themeBadgeVariants = cva(
     variants: {
       domain: {
         executing:
-          "bg-domain-executing-light text-domain-executing-dark border border-domain-executing/20 hover:bg-domain-executing hover:text-white hover:border-transparent",
+          "bg-domain-executing-light text-domain-executing-dark border border-domain-executing/20 hover:bg-domain-executing hover:text-white hover:border-transparent dark:bg-domain-executing/20 dark:text-domain-executing dark:border-domain-executing/30",
         influencing:
-          "bg-domain-influencing-light text-domain-influencing-dark border border-domain-influencing/20 hover:bg-domain-influencing hover:text-white hover:border-transparent",
+          "bg-domain-influencing-light text-domain-influencing-dark border border-domain-influencing/20 hover:bg-domain-influencing hover:text-white hover:border-transparent dark:bg-domain-influencing/20 dark:text-domain-influencing dark:border-domain-influencing/30",
         relationship:
-          "bg-domain-relationship-light text-domain-relationship-dark border border-domain-relationship/20 hover:bg-domain-relationship hover:text-white hover:border-transparent",
+          "bg-domain-relationship-light text-domain-relationship-dark border border-domain-relationship/20 hover:bg-domain-relationship hover:text-white hover:border-transparent dark:bg-domain-relationship/20 dark:text-domain-relationship dark:border-domain-relationship/30",
         strategic:
-          "bg-domain-strategic-light text-domain-strategic-dark border border-domain-strategic/20 hover:bg-domain-strategic hover:text-white hover:border-transparent",
+          "bg-domain-strategic-light text-domain-strategic-dark border border-domain-strategic/20 hover:bg-domain-strategic hover:text-white hover:border-transparent dark:bg-domain-strategic/20 dark:text-domain-strategic dark:border-domain-strategic/30",
       },
       size: {
         xs: "px-2 py-0.5 text-[10px]",

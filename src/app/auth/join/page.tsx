@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import {
-  Sparkles,
   Mail,
   Lock,
   User,
@@ -17,7 +16,9 @@ import {
   CheckCircle2,
   ArrowLeft,
   Building2,
+  Loader2,
 } from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
 
 interface OrganizationInfo {
   organizationId: string;
@@ -29,7 +30,7 @@ interface OrganizationInfo {
 
 type JoinStep = "code" | "register" | "login";
 
-export default function JoinOrganizationPage() {
+function JoinOrganizationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCode = searchParams.get("code") || "";
@@ -227,9 +228,8 @@ export default function JoinOrganizationPage() {
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Sparkles className="h-8 w-8 text-primary" />
-          <span className="font-display font-bold text-2xl">StrengthSync</span>
+        <div className="flex items-center justify-center mb-8">
+          <Logo size="lg" showText />
         </div>
 
         <Card className="shadow-soft-lg dark:shadow-soft-lg-dark">
@@ -515,5 +515,35 @@ export default function JoinOrganizationPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function JoinFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 mesh-gradient">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="floating-orb w-[400px] h-[400px] -top-24 -right-24 bg-domain-relationship opacity-30" />
+        <div className="floating-orb w-[300px] h-[300px] top-1/3 -left-20 bg-domain-influencing opacity-30" style={{ animationDelay: "2s" }} />
+        <div className="floating-orb w-[350px] h-[350px] -bottom-24 right-1/4 bg-domain-strategic opacity-30" style={{ animationDelay: "4s" }} />
+      </div>
+      <div className="relative w-full max-w-md">
+        <div className="flex items-center justify-center mb-8">
+          <Logo size="lg" showText />
+        </div>
+        <Card className="shadow-soft-lg dark:shadow-soft-lg-dark">
+          <CardContent className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export default function JoinOrganizationPage() {
+  return (
+    <Suspense fallback={<JoinFallback />}>
+      <JoinOrganizationForm />
+    </Suspense>
   );
 }

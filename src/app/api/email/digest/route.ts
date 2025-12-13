@@ -34,7 +34,14 @@ export async function GET(request: NextRequest) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
-    const { start, end } = getWeeklyDigestPeriod();
+    // Parse query params
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get("format");
+    const includeAI = searchParams.get("ai") !== "false"; // Default to including AI
+
+    // For preview (html/text format), show current week's data so users see recent activity
+    const isPreview = format === "html" || format === "text";
+    const { start, end } = getWeeklyDigestPeriod(isPreview);
 
     const digestData = await getUserDigestData(
       session.user.id,
@@ -43,11 +50,6 @@ export async function GET(request: NextRequest) {
       start,
       end
     );
-
-    // Check for format query param
-    const { searchParams } = new URL(request.url);
-    const format = searchParams.get("format");
-    const includeAI = searchParams.get("ai") !== "false"; // Default to including AI
 
     // Generate AI narrative if requested
     let aiNarrative: string | null = null;

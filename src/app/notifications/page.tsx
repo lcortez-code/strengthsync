@@ -45,10 +45,10 @@ const NOTIFICATION_COLORS: Record<string, string> = {
   SHOUTOUT_RECEIVED: "bg-domain-influencing/10 text-domain-influencing",
   SKILL_REQUEST_RESPONSE: "bg-domain-strategic/10 text-domain-strategic",
   MENTORSHIP_REQUEST: "bg-domain-relationship/10 text-domain-relationship",
-  BADGE_EARNED: "bg-yellow-100 text-yellow-600",
+  BADGE_EARNED: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400",
   CHALLENGE_INVITE: "bg-domain-executing/10 text-domain-executing",
-  NEW_MEMBER: "bg-blue-100 text-blue-600",
-  SYSTEM: "bg-gray-100 text-gray-600",
+  NEW_MEMBER: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
+  SYSTEM: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
 };
 
 export default function NotificationsPage() {
@@ -170,7 +170,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

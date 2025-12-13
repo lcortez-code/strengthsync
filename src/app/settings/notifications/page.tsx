@@ -182,7 +182,7 @@ export default function NotificationSettingsPage() {
     session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="font-display text-3xl font-bold flex items-center gap-2">

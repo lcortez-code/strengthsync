@@ -86,7 +86,7 @@ function getUrgencyBadge(urgency: string) {
       );
     case "HIGH":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
           <Clock className="h-3 w-3" />
           High Priority
         </span>
@@ -296,7 +296,7 @@ export default function RequestDetailPage({
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12">
             <div className="animate-pulse space-y-4">
@@ -312,7 +312,7 @@ export default function RequestDetailPage({
 
   if (!request) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Request not found</p>
@@ -331,7 +331,7 @@ export default function RequestDetailPage({
     (request.status === "OPEN" || request.status === "IN_PROGRESS");
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
@@ -407,7 +407,7 @@ export default function RequestDetailPage({
           </div>
 
           {/* Description */}
-          <div className="prose prose-sm max-w-none">
+          <div className="prose prose-sm dark:prose-invert max-w-none">
             <p className="whitespace-pre-wrap">{request.description}</p>
           </div>
 

@@ -191,7 +191,7 @@ export default function ChallengePage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -207,7 +207,7 @@ export default function ChallengePage() {
 
   if (error || !challenge) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -227,7 +227,7 @@ export default function ChallengePage() {
   const bingoProgress = challenge.myProgress as { board: BingoSquare[][]; completedLines: string[]; hasWon: boolean } | null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Back button */}
       <Button variant="ghost" onClick={() => router.back()}>
         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -333,8 +333,8 @@ export default function ChallengePage() {
                         "aspect-square rounded-lg border-2 p-1 flex flex-col items-center justify-center text-center transition-all",
                         square.marked
                           ? isInCompletedLine
-                            ? "bg-amber-100 border-amber-400"
-                            : "bg-domain-strategic-light border-domain-strategic"
+                            ? "bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600"
+                            : "bg-domain-strategic-light dark:bg-domain-strategic/20 border-domain-strategic"
                           : isFreeSpace
                           ? "bg-muted border-muted-foreground/20"
                           : isSelected

@@ -343,6 +343,7 @@ model Mentorship {
   focusAreas String[] // Themes or topics
   status     MentorshipStatus @default(ACTIVE)
   notes      String?          @db.Text
+  guide      Json?            // AI-generated mentorship guide
 
   startedAt DateTime  @default(now())
   endedAt   DateTime?
@@ -355,6 +356,7 @@ enum MentorshipStatus {
   ACTIVE
   PAUSED
   COMPLETED
+  DECLINED
 }
 
 // ============================================================================
@@ -567,6 +569,8 @@ enum NotificationType {
   SHOUTOUT_RECEIVED
   SKILL_REQUEST_RESPONSE
   MENTORSHIP_REQUEST
+  MENTORSHIP_ACCEPTED
+  MENTORSHIP_DECLINED
   BADGE_EARNED
   CHALLENGE_INVITE
   NEW_MEMBER

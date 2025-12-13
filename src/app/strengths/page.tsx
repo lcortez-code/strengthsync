@@ -142,7 +142,7 @@ export default function MyStrengthsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-64 bg-muted rounded" />
           <div className="h-4 w-96 bg-muted rounded" />
@@ -155,7 +155,7 @@ export default function MyStrengthsPage() {
 
   if (!data?.hasStrengths) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-12">
@@ -185,7 +185,7 @@ export default function MyStrengthsPage() {
     : data.strengths;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="font-display text-3xl font-bold flex items-center gap-2">

@@ -87,7 +87,7 @@ export default function ShoutoutsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -157,9 +157,9 @@ export default function ShoutoutsPage() {
                 <div className="flex items-start gap-4">
                   {/* Giver */}
                   <Link href={`/team/${shoutout.giver.id}`} className="flex-shrink-0">
-                    <Avatar className="h-12 w-12 ring-2 ring-offset-2 ring-domain-influencing/20 hover:ring-domain-influencing transition-all">
+                    <Avatar className="h-12 w-12">
                       <AvatarImage src={shoutout.giver.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(shoutout.giver.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -211,9 +211,9 @@ export default function ShoutoutsPage() {
 
                   {/* Receiver */}
                   <Link href={`/team/${shoutout.receiver.id}`} className="flex-shrink-0">
-                    <Avatar className="h-12 w-12 ring-2 ring-offset-2 ring-domain-strategic/20 hover:ring-domain-strategic transition-all">
+                    <Avatar className="h-12 w-12">
                       <AvatarImage src={shoutout.receiver.avatarUrl || undefined} />
-                      <AvatarFallback className="bg-domain-strategic-light text-domain-strategic dark:bg-domain-strategic/20 dark:text-domain-strategic-muted">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(shoutout.receiver.name)}
                       </AvatarFallback>
                     </Avatar>

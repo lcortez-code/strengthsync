@@ -198,6 +198,7 @@ export async function generateStructured<T extends z.ZodType>(
       prompt,
       schema,
       schemaName: options.schemaName,
+      mode: "json", // Use JSON mode for better compatibility
     });
 
     const latencyMs = Date.now() - startTime;

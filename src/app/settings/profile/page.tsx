@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
@@ -18,6 +18,8 @@ import {
   Sparkles,
   Check,
   X,
+  Camera,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +66,11 @@ export default function ProfileSettingsPage() {
   const [generatedBio, setGeneratedBio] = useState<string | null>(null);
   const [showGenerated, setShowGenerated] = useState(false);
 
+  // Avatar upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -82,6 +89,7 @@ export default function ProfileSettingsPage() {
         setBio(data.bio || "");
         setLinkedInUrl(data.linkedInUrl || "");
         setPronouns(data.pronouns || "");
+        setAvatarUrl(data.avatarUrl || null);
       }
     } catch (err) {
       console.error("Failed to fetch profile:", err);
@@ -100,8 +108,7 @@ export default function ProfileSettingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tone: "professional",
-          includeStrengths: true,
+          style: "professional",
         }),
       });
 
@@ -133,6 +140,73 @@ export default function ProfileSettingsPage() {
   const rejectGeneratedBio = () => {
     setGeneratedBio(null);
     setShowGenerated(false);
+  };
+
+  // Avatar upload handler
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const res = await fetch("/api/settings/avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setError(result.error?.message || "Failed to upload avatar");
+        return;
+      }
+
+      setAvatarUrl(result.data.avatarUrl);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+      setError("Failed to upload avatar. Please try again.");
+    } finally {
+      setUploadingAvatar(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Avatar remove handler
+  const handleAvatarRemove = async () => {
+    setUploadingAvatar(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/settings/avatar", {
+        method: "DELETE",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setError(result.error?.message || "Failed to remove avatar");
+        return;
+      }
+
+      setAvatarUrl(null);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Avatar remove error:", err);
+      setError("Failed to remove avatar. Please try again.");
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,7 +250,7 @@ export default function ProfileSettingsPage() {
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="font-display text-3xl font-bold flex items-center gap-2">
@@ -258,16 +332,64 @@ export default function ProfileSettingsPage() {
 
               {/* Avatar */}
               <div className="flex items-center gap-6">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile?.avatarUrl || undefined} />
-                  <AvatarFallback className="text-xl bg-primary text-primary-foreground">
-                    {getInitials(fullName || "U")}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
+                <div className="relative group">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={avatarUrl || undefined} />
+                    <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                      {getInitials(fullName || "U")}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Upload overlay */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {uploadingAvatar ? (
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    ) : (
+                      <Camera className="h-6 w-6 text-white" />
+                    )}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+                <div className="space-y-2">
                   <p className="font-medium">{profile?.email}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Avatar can be changed via Gravatar
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="text-xs"
+                    >
+                      <Camera className="h-3 w-3 mr-1.5" />
+                      {avatarUrl ? "Change" : "Upload"} Photo
+                    </Button>
+                    {avatarUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleAvatarRemove}
+                        disabled={uploadingAvatar}
+                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1.5" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    JPEG, PNG, GIF, or WebP. Max 5MB.
                   </p>
                 </div>
               </div>

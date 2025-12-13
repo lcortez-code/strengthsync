@@ -270,7 +270,7 @@ export async function getUserDigestData(
     SELECT rank FROM (
       SELECT id, RANK() OVER (ORDER BY points DESC) as rank
       FROM organization_members
-      WHERE organization_id = ${organizationId} AND status = 'ACTIVE'
+      WHERE "organizationId" = ${organizationId} AND status::text = 'ACTIVE'
     ) ranked
     WHERE id = ${memberId}
   `;
@@ -399,20 +399,24 @@ export async function wasDigestSent(
 /**
  * Get the date range for the current week's digest
  * Week runs Monday to Sunday
+ * @param currentWeek - If true, returns the current week (for preview). If false, returns previous week (for sending).
  */
-export function getWeeklyDigestPeriod(): { start: Date; end: Date } {
+export function getWeeklyDigestPeriod(currentWeek: boolean = false): { start: Date; end: Date } {
   const now = new Date();
   const dayOfWeek = now.getUTCDay();
 
   // Calculate days since last Monday
   const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
-  // Last Monday at 00:00:00 UTC
+  // For current week: This Monday. For previous week: subtract 7 more days.
+  const offset = currentWeek ? 0 : 7;
+
+  // Monday at 00:00:00 UTC
   const start = new Date(now);
-  start.setUTCDate(now.getUTCDate() - daysSinceMonday - 7);
+  start.setUTCDate(now.getUTCDate() - daysSinceMonday - offset);
   start.setUTCHours(0, 0, 0, 0);
 
-  // Last Sunday at 23:59:59 UTC
+  // Sunday at 23:59:59 UTC
   const end = new Date(start);
   end.setUTCDate(start.getUTCDate() + 6);
   end.setUTCHours(23, 59, 59, 999);

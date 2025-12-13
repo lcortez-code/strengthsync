@@ -32,7 +32,7 @@ npm run type-check       # TypeScript type checking (tsc --noEmit)
 
 # Database
 npm run db:generate      # Generate Prisma client (also runs on postinstall)
-npm run db:push          # Push schema to database
+npm run db:push          # Push schema to database (development only)
 npm run db:migrate       # Run migrations (prisma migrate dev)
 npm run db:seed          # Seed domains, themes, badges (npx tsx prisma/seed.ts)
 npm run db:reset         # Reset database (prisma migrate reset)
@@ -42,6 +42,8 @@ npx prisma studio        # Open Prisma Studio (DB GUI)
 docker-compose up -d     # Start all services
 docker-compose down      # Stop services
 ```
+
+**Note**: This project does not have tests configured yet. Focus on manual testing and type-checking.
 
 ## Architecture
 
@@ -223,6 +225,14 @@ const member = await prisma.organizationMember.findFirst({
 | Complete challenge | +50 |
 | Comment on feed | +2 |
 
+## Path Aliases
+
+The project uses `@/*` to reference `./src/*`. Always use this alias in imports:
+```typescript
+import { prisma } from "@/lib/prisma";
+import { apiSuccess } from "@/lib/api/response";
+```
+
 ## Environment Variables
 
 Required in `.env.local`:
@@ -290,9 +300,18 @@ Located in `src/app/api/ai/`:
 - `mentorship-guide` - Mentorship conversation guides
 - `match-skill-request` - Find team members for skill requests
 - `goals/suggest` - Suggest performance review goals
-- `chat` - General strengths coaching chat
+- `improve-skill-request` - Enhance skill request descriptions
+- `executive-summary` - Generate team executive summaries
+- `chat` - General strengths coaching chat with conversation persistence
 
 AI usage is tracked in `AIUsageLog` table with token counts and costs.
+
+### AI Conversation Persistence
+Chat conversations are persisted via `AIConversation` and `AIMessage` models:
+- `GET /api/ai/chat/conversations` - List user's conversations
+- `GET /api/ai/chat/conversations/[conversationId]` - Get conversation with messages
+- `POST /api/ai/chat` with `conversationId` - Continue existing conversation
+- `DELETE /api/ai/chat/conversations/[conversationId]` - Delete conversation
 
 ## Key Data Relationships
 
@@ -308,3 +327,31 @@ AI usage is tracked in `AIUsageLog` table with token counts and costs.
 3. Badge criteria checked → `BadgeEarned` records created
 4. `FeedItem` created for social visibility
 5. `Notification` sent to relevant users
+
+## Admin Features
+
+Admin routes (`/admin/*`) require `role: OWNER | ADMIN`. Key admin capabilities:
+- **Members**: View/edit all organization members, import strengths via PDF
+- **Review Cycles**: Create/manage performance review cycles (QUARTERLY, SEMI_ANNUAL, etc.)
+- **AI Prompts**: Manage AI prompt templates (`AIPromptTemplate`)
+- **AI Usage**: Monitor token usage and costs across the organization
+- **Constants**: Edit strength domains and themes (reference data)
+- **Health Metrics**: Dashboard metrics for organization health
+
+## NextAuth Session Type
+
+The session object includes organization context:
+```typescript
+session.user = {
+  id: string;           // User ID
+  email: string;
+  name: string;
+  image?: string;
+  organizationId?: string;  // Current org
+  organizationName?: string;
+  memberId?: string;    // OrganizationMember ID
+  role?: "OWNER" | "ADMIN" | "MEMBER";
+};
+```
+
+Type augmentations are defined in `src/lib/auth/config.ts`.

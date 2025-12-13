@@ -113,8 +113,8 @@ function PartnershipCard({ partnership }: { partnership: Partnership }) {
           href={`/team/${partnership.member1.id}`}
           className="flex-1 flex items-center gap-3 group"
         >
-          <Avatar className="ring-2 ring-offset-2 ring-domain-executing/20">
-            <AvatarFallback className="bg-domain-executing-light text-domain-executing dark:bg-domain-executing/20 dark:text-domain-executing-muted">
+          <Avatar>
+            <AvatarFallback className="bg-primary text-primary-foreground">
               {getInitials(partnership.member1.name)}
             </AvatarFallback>
           </Avatar>
@@ -150,8 +150,8 @@ function PartnershipCard({ partnership }: { partnership: Partnership }) {
               {partnership.member2.topTheme}
             </p>
           </div>
-          <Avatar className="ring-2 ring-offset-2 ring-domain-strategic/20">
-            <AvatarFallback className="bg-domain-strategic-light text-domain-strategic dark:bg-domain-strategic/20 dark:text-domain-strategic-muted">
+          <Avatar>
+            <AvatarFallback className="bg-primary text-primary-foreground">
               {getInitials(partnership.member2.name)}
             </AvatarFallback>
           </Avatar>

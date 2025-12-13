@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth/config";
 import { streamText, CoreMessage } from "ai";
 import { openai, checkAIReady, getFeatureSettings, checkAllLimits, logUsage } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
-import { buildUserContext, buildTeamContext } from "@/lib/ai/context";
+import { buildUserContext, buildTeamContext, formatTeamContextForPrompt, formatUserContextForPrompt } from "@/lib/ai/context";
 
 const SYSTEM_PROMPT = `You are StrengthSync AI, a helpful assistant for a CliftonStrengths-based team collaboration app.
 
@@ -88,14 +88,39 @@ export async function POST(request: NextRequest) {
     let contextPrompt = SYSTEM_PROMPT;
 
     if (userContext) {
-      contextPrompt += `\n\nCurrent user: ${userContext.fullName}`;
-      if (userContext.topStrengths.length > 0) {
-        contextPrompt += `\nUser's top 5 strengths: ${userContext.topStrengths.map((s) => s.name).join(", ")}`;
-      }
+      contextPrompt += `\n\n=== CURRENT USER PROFILE ===\n${formatUserContextForPrompt(userContext)}`;
     }
 
     if (teamContext) {
-      contextPrompt += `\n\nOrganization: ${teamContext.organizationName} (${teamContext.memberCount} members)`;
+      contextPrompt += `\n\n${formatTeamContextForPrompt(teamContext)}`;
+
+      // Add individual team member details with ALL strengths
+      if (teamContext.members.length > 0) {
+        contextPrompt += `\n\n**Team Members - Complete CliftonStrengths Profiles:**`;
+        for (const member of teamContext.members) {
+          contextPrompt += `\n\n${member.name}${member.jobTitle ? ` (${member.jobTitle})` : ""}:`;
+          if (member.allStrengths.length > 0) {
+            // Group strengths into sections for readability
+            const top5 = member.allStrengths.filter(s => s.rank <= 5);
+            const ranks6to10 = member.allStrengths.filter(s => s.rank > 5 && s.rank <= 10);
+            const ranks11to20 = member.allStrengths.filter(s => s.rank > 10 && s.rank <= 20);
+            const bottom14 = member.allStrengths.filter(s => s.rank > 20);
+
+            if (top5.length > 0) {
+              contextPrompt += `\n  Top 5 (Signature Themes): ${top5.map(s => `${s.rank}. ${s.name} [${s.domain}]`).join(", ")}`;
+            }
+            if (ranks6to10.length > 0) {
+              contextPrompt += `\n  Ranks 6-10: ${ranks6to10.map(s => `${s.rank}. ${s.name}`).join(", ")}`;
+            }
+            if (ranks11to20.length > 0) {
+              contextPrompt += `\n  Ranks 11-20: ${ranks11to20.map(s => `${s.rank}. ${s.name}`).join(", ")}`;
+            }
+            if (bottom14.length > 0) {
+              contextPrompt += `\n  Ranks 21-34 (Lesser Themes): ${bottom14.map(s => `${s.rank}. ${s.name}`).join(", ")}`;
+            }
+          }
+        }
+      }
     }
 
     const settings = getFeatureSettings("chat");

@@ -43,7 +43,8 @@ const FOCUS_AREAS = [
   "Conflict Resolution",
 ];
 
-function getInitials(name: string): string {
+function getInitials(name: string | undefined | null): string {
+  if (!name) return "?";
   return name
     .split(" ")
     .map((n) => n[0])
@@ -80,12 +81,16 @@ function MentorshipRequestContent() {
       const res = await fetch(`/api/members/${mentorId}`);
       if (res.ok) {
         const result = await res.json();
+        const data = result.data;
         setMentor({
-          id: result.data.id,
-          name: result.data.name,
-          avatarUrl: result.data.avatarUrl,
-          jobTitle: result.data.jobTitle,
-          topStrengths: result.data.topStrengths || [],
+          id: data.id,
+          name: data.user?.name || "Unknown",
+          avatarUrl: data.user?.image || null,
+          jobTitle: data.title || null,
+          topStrengths: (data.strengths || []).slice(0, 5).map((s: { theme: { name: string; domain: { slug: string } } }) => ({
+            name: s.theme.name,
+            domain: s.theme.domain.slug,
+          })),
         });
       }
     } catch (err) {
@@ -153,7 +158,7 @@ function MentorshipRequestContent() {
 
   if (success) {
     return (
-      <div className="max-w-xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-4" />
@@ -177,7 +182,7 @@ function MentorshipRequestContent() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
@@ -202,7 +207,7 @@ function MentorshipRequestContent() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+              <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 {error}
               </div>
@@ -220,11 +225,11 @@ function MentorshipRequestContent() {
                 </div>
               </div>
             ) : mentor ? (
-              <div className="p-4 bg-domain-relationship-light rounded-lg border border-domain-relationship/20">
+              <div className="p-4 bg-domain-relationship-light dark:bg-domain-relationship/20 rounded-lg border border-domain-relationship/20 dark:border-domain-relationship/30">
                 <div className="flex items-center gap-4">
-                  <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/20">
+                  <Avatar className="h-14 w-14">
                     <AvatarImage src={mentor.avatarUrl || undefined} />
-                    <AvatarFallback className="bg-domain-relationship text-white dark:bg-domain-relationship/80">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
                       {getInitials(mentor.name)}
                     </AvatarFallback>
                   </Avatar>

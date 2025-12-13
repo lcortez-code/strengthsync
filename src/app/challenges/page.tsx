@@ -87,14 +87,14 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "ACTIVE":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic bg-domain-strategic-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-strategic-dark bg-domain-strategic-light dark:bg-domain-strategic/20 dark:text-domain-strategic px-2 py-0.5 rounded-full">
           <Play className="h-3 w-3" />
           Active
         </span>
       );
     case "UPCOMING":
       return (
-        <span className="flex items-center gap-1 text-xs font-medium text-domain-influencing bg-domain-influencing-light px-2 py-0.5 rounded-full">
+        <span className="flex items-center gap-1 text-xs font-medium text-domain-influencing-dark bg-domain-influencing-light dark:bg-domain-influencing/20 dark:text-domain-influencing px-2 py-0.5 rounded-full">
           <Clock className="h-3 w-3" />
           Upcoming
         </span>
@@ -149,7 +149,7 @@ export default function ChallengesPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

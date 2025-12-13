@@ -6,8 +6,10 @@ import { z } from "zod";
 import { generateStructured, checkAIReady } from "@/lib/ai";
 import { buildUserContext } from "@/lib/ai/context/user-context";
 import { THEMES } from "@/constants/strengths-data";
+import { prisma } from "@/lib/prisma";
 
 const mentorshipGuideSchema = z.object({
+  mentorshipId: z.string().min(1, "Mentorship ID is required"),
   mentorId: z.string().min(1, "Mentor ID is required"),
   menteeId: z.string().min(1, "Mentee ID is required"),
   focusThemes: z.array(z.string()).optional(), // Specific themes to focus on
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { mentorId, menteeId, focusThemes, duration } = validation.data;
+    const { mentorshipId, mentorId, menteeId, focusThemes, duration } = validation.data;
 
     // Build context for both members
     const [mentorContext, menteeContext] = await Promise.all([
@@ -199,7 +201,13 @@ Dominant Domain: ${menteeContext.dominantDomain || "Balanced"}
       );
     }
 
-    console.log(`[AI Mentorship Guide] Generated guide for ${mentorContext.fullName} -> ${menteeContext.fullName}`);
+    // Save the guide to the database
+    await prisma.mentorship.update({
+      where: { id: mentorshipId },
+      data: { guide: JSON.parse(JSON.stringify(result.data)) },
+    });
+
+    console.log(`[AI Mentorship Guide] Generated and saved guide for ${mentorContext.fullName} -> ${menteeContext.fullName}`);
 
     return apiSuccess({
       guide: result.data,

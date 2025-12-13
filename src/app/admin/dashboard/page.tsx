@@ -180,7 +180,7 @@ export default function ManagerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold">Manager Dashboard</h1>
@@ -229,7 +229,7 @@ export default function ManagerDashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

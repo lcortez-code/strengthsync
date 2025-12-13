@@ -11,9 +11,7 @@ import {
   Rss,
   RefreshCw,
   Heart,
-  Star,
   PartyPopper,
-  Sparkles,
   HandHeart,
   MessageCircle,
   Send,
@@ -96,16 +94,12 @@ interface FeedItem {
 const EMOJI_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   like: Heart,
   celebrate: PartyPopper,
-  love: Sparkles,
-  star: Star,
   clap: HandHeart,
 };
 
 const EMOJI_LABELS: Record<string, string> = {
   like: "Like",
   celebrate: "Celebrate",
-  love: "Love",
-  star: "Star",
   clap: "Applaud",
 };
 
@@ -116,6 +110,56 @@ function getInitials(name: string): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+function getFeedTypeBadge(type: string) {
+  const badges: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
+    SHOUTOUT: {
+      icon: <Award className="h-3.5 w-3.5" />,
+      label: "Shoutout",
+      className: "bg-domain-influencing-light text-domain-influencing-dark dark:bg-domain-influencing/20 dark:text-domain-influencing",
+    },
+    SKILL_REQUEST: {
+      icon: <ShoppingBag className="h-3.5 w-3.5" />,
+      label: "Skill Request",
+      className: "bg-domain-strategic-light text-domain-strategic-dark dark:bg-domain-strategic/20 dark:text-domain-strategic",
+    },
+    BADGE_EARNED: {
+      icon: <Trophy className="h-3.5 w-3.5" />,
+      label: "Badge",
+      className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    },
+    CHALLENGE_STARTED: {
+      icon: <Trophy className="h-3.5 w-3.5" />,
+      label: "Challenge",
+      className: "bg-domain-executing-light text-domain-executing-dark dark:bg-domain-executing/20 dark:text-domain-executing",
+    },
+    CHALLENGE_COMPLETED: {
+      icon: <Trophy className="h-3.5 w-3.5" />,
+      label: "Challenge",
+      className: "bg-domain-executing-light text-domain-executing-dark dark:bg-domain-executing/20 dark:text-domain-executing",
+    },
+    NEW_MEMBER: {
+      icon: <Users className="h-3.5 w-3.5" />,
+      label: "New Member",
+      className: "bg-domain-relationship-light text-domain-relationship-dark dark:bg-domain-relationship/20 dark:text-domain-relationship",
+    },
+    ANNOUNCEMENT: {
+      icon: <Megaphone className="h-3.5 w-3.5" />,
+      label: "Announcement",
+      className: "bg-primary/10 text-primary dark:bg-primary/20",
+    },
+  };
+
+  const badge = badges[type];
+  if (!badge) return null;
+
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", badge.className)}>
+      {badge.icon}
+      {badge.label}
+    </span>
+  );
 }
 
 function getFeedItemIcon(type: string) {
@@ -211,14 +255,14 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href={`/team/${item.creator.id}`}
                 className="font-semibold hover:text-primary transition-colors"
               >
                 {item.creator.name}
               </Link>
-              {getFeedItemIcon(item.type)}
+              {getFeedTypeBadge(item.type)}
             </div>
             <p className="text-xs text-muted-foreground">
               {item.creator.jobTitle && `${item.creator.jobTitle} · `}
@@ -239,7 +283,7 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
                 {item.shoutout.receiver.name}
               </Link>
             </p>
-            <div className="p-4 bg-domain-influencing-light rounded-lg border-l-4 border-domain-influencing">
+            <div className="p-4 bg-domain-influencing-light dark:bg-domain-influencing/20 rounded-lg border-l-4 border-domain-influencing">
               <p className="italic">&ldquo;{item.shoutout.message}&rdquo;</p>
               {item.shoutout.theme && (
                 <div className="mt-2">
@@ -260,9 +304,9 @@ function FeedItemCard({ item, onReact }: { item: FeedItem; onReact: (emoji: stri
               <div className="flex items-center gap-2 mb-2">
                 <span className={cn(
                   "text-xs px-2 py-0.5 rounded-full",
-                  item.skillRequest.status === "OPEN" ? "bg-green-100 text-green-700" :
-                  item.skillRequest.status === "IN_PROGRESS" ? "bg-blue-100 text-blue-700" :
-                  "bg-gray-100 text-gray-700"
+                  item.skillRequest.status === "OPEN" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" :
+                  item.skillRequest.status === "IN_PROGRESS" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" :
+                  "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400"
                 )}>
                   {item.skillRequest.status.replace("_", " ")}
                 </span>
@@ -516,7 +560,7 @@ export default function FeedPage() {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

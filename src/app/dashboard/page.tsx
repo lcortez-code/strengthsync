@@ -311,7 +311,7 @@ export default function DashboardPage() {
                       className="flex items-start gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                     >
                       <Avatar>
-                        <AvatarFallback className="bg-domain-influencing-light text-domain-influencing dark:bg-domain-influencing/20 dark:text-domain-influencing-muted">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
                           {getInitials(shoutout.giver.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -413,9 +413,9 @@ export default function DashboardPage() {
             <CardContent>
               {data?.suggestedPartner ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-domain-relationship-light/50 to-domain-strategic-light/50">
-                    <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-domain-relationship/30">
-                      <AvatarFallback className="text-lg bg-domain-relationship-light text-domain-relationship dark:bg-domain-relationship/20 dark:text-domain-relationship-muted">
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-domain-relationship-light/50 to-domain-strategic-light/50 dark:from-domain-relationship/20 dark:to-domain-strategic/20">
+                    <Avatar className="h-14 w-14">
+                      <AvatarFallback className="text-lg bg-primary text-primary-foreground">
                         {getInitials(data.suggestedPartner.memberName)}
                       </AvatarFallback>
                     </Avatar>
