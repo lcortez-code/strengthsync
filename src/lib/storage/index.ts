@@ -1,42 +1,56 @@
-import { writeFile, mkdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import crypto from "crypto";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
-const AVATARS_DIR = path.join(UPLOAD_DIR, "avatars");
+// S3 Configuration
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || "us-east-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+  },
+});
+
+const BUCKET_NAME = process.env.AWS_S3_BUCKET || "";
 
 // Allowed image types
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
+// Content type to extension mapping
+const CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+};
+
 export interface UploadResult {
   url: string;
-  fileName: string;
+  key: string;
 }
 
 export interface UploadError {
   message: string;
-  code: "INVALID_TYPE" | "FILE_TOO_LARGE" | "UPLOAD_FAILED";
+  code: "INVALID_TYPE" | "FILE_TOO_LARGE" | "UPLOAD_FAILED" | "NOT_CONFIGURED";
 }
 
 /**
- * Ensure upload directories exist
+ * Check if S3 is properly configured
  */
-async function ensureDirectories(): Promise<void> {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-  }
-  if (!existsSync(AVATARS_DIR)) {
-    await mkdir(AVATARS_DIR, { recursive: true });
-  }
+export function isS3Configured(): boolean {
+  return !!(
+    process.env.AWS_REGION &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_S3_BUCKET
+  );
 }
 
 /**
  * Generate a unique filename for uploads
  */
-function generateFileName(originalName: string, userId: string): string {
-  const ext = path.extname(originalName).toLowerCase();
+function generateFileName(contentType: string, userId: string): string {
+  const ext = CONTENT_TYPE_TO_EXT[contentType] || ".jpg";
   const timestamp = Date.now();
   const hash = crypto.randomBytes(8).toString("hex");
   return `${userId}-${timestamp}-${hash}${ext}`;
@@ -72,49 +86,87 @@ export function validateFile(
 }
 
 /**
- * Upload an avatar image
+ * Get the S3 key from a full URL
+ */
+function getKeyFromUrl(url: string): string | null {
+  if (!url) return null;
+
+  // Handle S3 URLs
+  if (url.includes(".s3.") && url.includes("amazonaws.com")) {
+    // Format: https://bucket.s3.region.amazonaws.com/key
+    const urlObj = new URL(url);
+    return urlObj.pathname.slice(1); // Remove leading /
+  }
+
+  // Handle local URLs (for backwards compatibility)
+  if (url.startsWith("/uploads/avatars/")) {
+    return null; // Local file, can't delete from S3
+  }
+
+  return null;
+}
+
+/**
+ * Upload an avatar image to S3
  * Returns the public URL of the uploaded file
  */
 export async function uploadAvatar(
   file: File,
   userId: string
 ): Promise<UploadResult> {
-  await ensureDirectories();
+  if (!isS3Configured()) {
+    throw new Error("S3 is not configured. Please set AWS environment variables.");
+  }
 
-  const fileName = generateFileName(file.name, userId);
-  const filePath = path.join(AVATARS_DIR, fileName);
+  const fileName = generateFileName(file.type, userId);
+  const key = `avatars/${fileName}`;
 
   // Convert File to Buffer
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  // Write file to disk
-  await writeFile(filePath, buffer);
+  // Upload to S3
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    Body: buffer,
+    ContentType: file.type,
+    CacheControl: "max-age=31536000", // 1 year cache
+  });
 
-  // Return the public URL
+  await s3Client.send(command);
+
+  // Construct the public URL
+  const url = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
   return {
-    url: `/uploads/avatars/${fileName}`,
-    fileName,
+    url,
+    key,
   };
 }
 
 /**
- * Delete an avatar file
+ * Delete an avatar from S3
  */
 export async function deleteAvatar(avatarUrl: string): Promise<void> {
-  if (!avatarUrl || !avatarUrl.startsWith("/uploads/avatars/")) {
-    return; // Not a local upload, skip
+  if (!avatarUrl || !isS3Configured()) {
+    return;
   }
 
-  const fileName = avatarUrl.replace("/uploads/avatars/", "");
-  const filePath = path.join(AVATARS_DIR, fileName);
+  const key = getKeyFromUrl(avatarUrl);
+  if (!key) {
+    return; // Not an S3 URL or couldn't parse
+  }
 
   try {
-    if (existsSync(filePath)) {
-      await unlink(filePath);
-    }
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+
+    await s3Client.send(command);
   } catch (error) {
-    console.error("Failed to delete avatar file:", error);
+    console.error("Failed to delete avatar from S3:", error);
     // Don't throw - file deletion failure shouldn't break the flow
   }
 }

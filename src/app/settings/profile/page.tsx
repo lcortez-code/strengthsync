@@ -46,7 +46,7 @@ function getInitials(name: string): string {
 }
 
 export default function ProfileSettingsPage() {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -167,6 +167,8 @@ export default function ProfileSettingsPage() {
       }
 
       setAvatarUrl(result.data.avatarUrl);
+      // Refresh session so other components get the new avatar
+      await updateSession();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -199,6 +201,8 @@ export default function ProfileSettingsPage() {
       }
 
       setAvatarUrl(null);
+      // Refresh session so other components get the update
+      await updateSession();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

@@ -78,6 +78,21 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).organizationName = token.organizationName;
         (session.user as any).memberId = token.memberId;
         (session.user as any).role = token.role;
+
+        // Fetch latest avatar from database (allows updates without re-login)
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { avatarUrl: true, fullName: true },
+          });
+          if (user) {
+            session.user.image = user.avatarUrl;
+            session.user.name = user.fullName;
+          }
+        } catch (error) {
+          // Silently fail - use cached data if DB query fails
+          console.error("Failed to fetch user data for session:", error);
+        }
       }
       return session;
     },

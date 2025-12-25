@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Avatar upload error:", error);
-    return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to upload avatar");
+    const message = error instanceof Error ? error.message : "Failed to upload avatar";
+    return apiError(ApiErrorCode.INTERNAL_ERROR, message);
   }
 }
 
