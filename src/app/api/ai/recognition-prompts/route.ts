@@ -20,7 +20,7 @@ const recognitionPromptsOutputSchema = z.object({
       recognitionReason: z.string().describe("Why to recognize this person (2-3 sentences)"),
       suggestedTheme: z.string().describe("Which CliftonStrength theme to highlight"),
       shoutoutStarter: z.string().describe("A ready-to-use shoutout message starter (1-2 sentences)"),
-      context: z.string().describe("What specific behavior or contribution to recognize"),
+      context: z.string().optional().describe("What specific behavior or contribution to recognize"),
     })
   ).describe("Array of recognition suggestions"),
   noSuggestionsReason: z.string().optional().describe("Explanation if no suggestions could be generated"),
