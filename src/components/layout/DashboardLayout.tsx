@@ -213,6 +213,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* User section */}
         <div className="p-3 border-t border-border/50 flex-shrink-0">
+          {/* Version label - inconspicuous */}
+          <div className="text-[10px] text-muted-foreground/50 text-center mb-2" title={`Built: ${process.env.NEXT_PUBLIC_BUILD_TIME || 'dev'}`}>
+            v{process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'}
+          </div>
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
