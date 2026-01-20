@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         where: { memberId: targetMember.id },
       });
 
-      // Create new strengths
+      // Create new strengths with all personalized content
       const strengthsData = parsed.themes
         .filter((t) => themeMap.has(t.slug))
         .map((theme) => ({
@@ -162,6 +162,16 @@ export async function POST(request: NextRequest) {
           isTop5: theme.rank <= 5,
           isTop10: theme.rank <= 10,
           personalizedDescription: theme.personalizedDescription,
+          // NEW: Store personalized insights array
+          personalizedInsights: theme.personalizedInsights || [],
+          // NEW: Store strength blends as JSON
+          strengthBlends: theme.strengthBlends
+            ? JSON.parse(JSON.stringify(theme.strengthBlends))
+            : null,
+          // NEW: Store apply section as JSON
+          applySection: theme.applySection
+            ? JSON.parse(JSON.stringify(theme.applySection))
+            : null,
         }));
 
       await prisma.memberStrength.createMany({

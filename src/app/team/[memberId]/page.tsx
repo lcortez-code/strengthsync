@@ -25,9 +25,13 @@ import {
   Lightbulb,
   UserPlus,
   BookOpen,
+  Link2,
+  Quote,
+  CheckSquare,
 } from "lucide-react";
 import Link from "next/link";
 import type { DomainSlug } from "@/constants/strengths-data";
+import type { StrengthBlend, ApplySection } from "@/types";
 
 interface MemberProfile {
   id: string;
@@ -45,6 +49,12 @@ interface MemberProfile {
     id: string;
     rank: number;
     personalizedDescription: string | null;
+    // NEW: Array of personalized insight paragraphs
+    personalizedInsights?: string[];
+    // NEW: How this strength blends with other Top 5 themes
+    strengthBlends?: StrengthBlend[] | null;
+    // NEW: Apply section with tagline and action items
+    applySection?: ApplySection | null;
     theme: {
       slug: string;
       name: string;
@@ -354,8 +364,37 @@ export default function MemberProfilePage() {
                         {/* Expanded Details */}
                         {isExpanded && (
                           <div className="px-4 pb-4 space-y-4 border-t border-border/50 pt-4 ml-12">
-                            {/* Full Description */}
-                            {strength.theme.fullDescription && (
+                            {/* Personalized Insights Section - prioritize over generic */}
+                            {strength.personalizedInsights && strength.personalizedInsights.length > 0 ? (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <Sparkles className="h-4 w-4 text-domain-influencing" />
+                                  Why Their {strength.theme.name} Is Unique
+                                </div>
+                                <div className="space-y-2">
+                                  {strength.personalizedInsights.map((insight, idx) => (
+                                    <p
+                                      key={idx}
+                                      className="text-sm text-muted-foreground leading-relaxed"
+                                    >
+                                      {insight}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : strength.personalizedDescription ? (
+                              // Fallback to single personalized description
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <Sparkles className="h-4 w-4 text-domain-influencing" />
+                                  Personal Insight
+                                </div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  {strength.personalizedDescription}
+                                </p>
+                              </div>
+                            ) : strength.theme.fullDescription && (
+                              // Fallback to generic description
                               <div>
                                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
                                   <BookOpen className="h-4 w-4 text-domain-strategic" />
@@ -367,16 +406,65 @@ export default function MemberProfilePage() {
                               </div>
                             )}
 
-                            {/* Personalized Description (if available) */}
-                            {strength.personalizedDescription && (
+                            {/* NEW: Strength Blends Section */}
+                            {strength.strengthBlends && strength.strengthBlends.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
-                                  <Sparkles className="h-4 w-4 text-domain-influencing" />
-                                  Your Personal Insight
+                                  <Link2 className="h-4 w-4 text-domain-relationship" />
+                                  How {strength.theme.name} Blends With Their Other Strengths
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                  {strength.personalizedDescription}
-                                </p>
+                                <div className="space-y-2">
+                                  {strength.strengthBlends.map((blend, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="p-2 rounded-lg bg-domain-relationship/5 border border-domain-relationship/10"
+                                    >
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-medium">{strength.theme.name}</span>
+                                        <span className="text-muted-foreground text-xs">+</span>
+                                        <span className="text-xs font-medium text-domain-relationship">
+                                          {blend.pairedTheme}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground leading-relaxed">
+                                        {blend.description}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* NEW: Apply Section */}
+                            {strength.applySection && (strength.applySection.tagline || strength.applySection.actionItems.length > 0) && (
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                                  <Target className="h-4 w-4 text-domain-strategic" />
+                                  Apply {strength.theme.name} to Succeed
+                                </div>
+                                {strength.applySection.tagline && (
+                                  <div className="mb-2 pl-3 border-l-2 border-domain-strategic/50">
+                                    <div className="flex items-start gap-2">
+                                      <Quote className="h-3 w-3 text-domain-strategic flex-shrink-0 mt-0.5" />
+                                      <p className="text-xs italic text-muted-foreground">
+                                        {strength.applySection.tagline}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                {strength.applySection.actionItems.length > 0 && (
+                                  <ul className="space-y-1">
+                                    {strength.applySection.actionItems.map((item, idx) => (
+                                      <li
+                                        key={idx}
+                                        className="text-xs text-muted-foreground flex items-start gap-2"
+                                      >
+                                        <CheckSquare className="h-3 w-3 text-domain-strategic flex-shrink-0 mt-0.5" />
+                                        {item}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                               </div>
                             )}
 
@@ -401,8 +489,8 @@ export default function MemberProfilePage() {
                               </div>
                             )}
 
-                            {/* Action Items */}
-                            {strength.theme.actionItems.length > 0 && (
+                            {/* Generic Action Items - only show if no personalized apply section */}
+                            {(!strength.applySection || strength.applySection.actionItems.length === 0) && strength.theme.actionItems.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
                                   <Lightbulb className="h-4 w-4 text-domain-strategic" />
@@ -422,8 +510,8 @@ export default function MemberProfilePage() {
                               </div>
                             )}
 
-                            {/* Works Well With */}
-                            {strength.theme.worksWith.length > 0 && (
+                            {/* Works Well With - only show if no blends section */}
+                            {(!strength.strengthBlends || strength.strengthBlends.length === 0) && strength.theme.worksWith.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
                                   <UserPlus className="h-4 w-4 text-domain-relationship" />

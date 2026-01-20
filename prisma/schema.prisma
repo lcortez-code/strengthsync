@@ -189,6 +189,17 @@ model MemberStrength {
   // Personalized insights from PDF
   personalizedDescription String? @db.Text
 
+  // NEW: Array of ~5 personalized insight paragraphs from "Why Your [Strength] Is Unique"
+  personalizedInsights String[]
+
+  // NEW: How this strength blends with other Top 5
+  // Shape: [{ pairedTheme: string, pairedThemeSlug: string, description: string }]
+  strengthBlends Json?
+
+  // NEW: Apply section with tagline + action items from "Apply Your [Strength] to Succeed"
+  // Shape: { tagline: string, actionItems: string[] }
+  applySection Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
