@@ -1,6 +1,19 @@
 // Re-export types for convenience
 export type { Domain, Theme, DomainSlug } from "@/constants/strengths-data";
 
+// NEW: Strength blend interface - how this strength pairs with another Top 5 theme
+export interface StrengthBlend {
+  pairedTheme: string;      // e.g., "Strategic"
+  pairedThemeSlug: string;  // e.g., "strategic"
+  description: string;      // The description of how they blend together
+}
+
+// NEW: Apply section with tagline and action items
+export interface ApplySection {
+  tagline: string;           // The motivational tagline/quote
+  actionItems: string[];     // 2 action items for applying the strength
+}
+
 // User and member types
 export interface SessionUser {
   id: string;
@@ -52,6 +65,12 @@ export interface MemberStrengthData {
   isTop5: boolean;
   isTop10: boolean;
   personalizedDescription?: string | null;
+  // NEW: Array of personalized insight paragraphs from "Why Your [Strength] Is Unique"
+  personalizedInsights?: string[];
+  // NEW: How this strength blends with other Top 5 themes
+  strengthBlends?: StrengthBlend[] | null;
+  // NEW: Apply section with tagline + action items
+  applySection?: ApplySection | null;
 }
 
 export interface ExpertiseTag {

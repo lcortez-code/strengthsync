@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Note**: This project uses [bd (beads)](https://github.com/steveyegge/beads) for issue tracking. Use `bd` commands instead of markdown TODOs. See AGENTS.md for workflow details.
+**Issue Tracking**: This project uses [bd (beads)](https://github.com/steveyegge/beads) for issue tracking. Use `bd` commands instead of markdown TODOs. See AGENTS.md for details.
 
 ## Project Overview
 
 **StrengthSync** is a CliftonStrengths-based team collaboration app that helps teams discover, leverage, and celebrate their unique strengths through analytics, recognition, and gamification.
 
-**GitHub Repository**: https://github.com/freeup86/strengthsync
+**GitHub**: https://github.com/freeup86/strengthsync
 
 ### Tech Stack
 - **Framework**: Next.js 15 (App Router, Turbopack)
@@ -24,13 +24,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Development
 npm run dev              # Start dev server (port 3000) with Turbopack
 npm run build            # Build for production
 npm run lint             # Run ESLint
 npm run type-check       # TypeScript type checking (tsc --noEmit)
 
-# Database
 npm run db:generate      # Generate Prisma client (also runs on postinstall)
 npm run db:push          # Push schema to database (development only)
 npm run db:migrate       # Run migrations (prisma migrate dev)
@@ -38,12 +36,11 @@ npm run db:seed          # Seed domains, themes, badges (npx tsx prisma/seed.ts)
 npm run db:reset         # Reset database (prisma migrate reset)
 npx prisma studio        # Open Prisma Studio (DB GUI)
 
-# Docker
-docker-compose up -d     # Start all services
+docker-compose up -d     # Start PostgreSQL and other services
 docker-compose down      # Stop services
 ```
 
-**Note**: This project does not have tests configured yet. Focus on manual testing and type-checking.
+**Note**: No test framework configured. Use manual testing and `npm run type-check`.
 
 ## Architecture
 
@@ -73,7 +70,7 @@ docker-compose down      # Stop services
 - `src/types/index.ts` - TypeScript interfaces (SessionUser, MemberProfile, TeamComposition, etc.)
 - `prisma/schema.prisma` - Database schema (source of truth for models)
 
-### CliftonStrengths Domain Colors
+### CliftonStrengths Domain Colors (defined in `tailwind.config.ts`)
 | Domain | Hex | Tailwind Classes |
 |--------|-----|------------------|
 | Executing | #7B68EE (Purple) | `bg-domain-executing`, `text-domain-executing` |
@@ -81,7 +78,7 @@ docker-compose down      # Stop services
 | Relationship | #4A90D9 (Blue) | `bg-domain-relationship`, `text-domain-relationship` |
 | Strategic | #7CB342 (Green) | `bg-domain-strategic`, `text-domain-strategic` |
 
-Each domain color has variants: `DEFAULT`, `-light`, `-dark`, `-muted` (e.g., `bg-domain-executing-light`).
+Each domain color has variants: `-light`, `-dark`, `-muted` (e.g., `bg-domain-executing-light`).
 
 ### Multi-Tenant Architecture
 - **Organization**: Contains members, challenges, feed items, review cycles. Has `inviteCode` for member signup.
@@ -90,10 +87,10 @@ Each domain color has variants: `DEFAULT`, `-light`, `-dark`, `-muted` (e.g., `b
 - Session contains: `id`, `email`, `name`, `organizationId`, `memberId`, `role`
 - All API routes must verify both `organizationId` and `memberId` from session
 
-### Route Protection
-Protected routes (require auth): `/dashboard`, `/strengths`, `/team`, `/directory`, `/marketplace`, `/mentorship`, `/shoutouts`, `/challenges`, `/cards`, `/leaderboard`, `/feed`, `/settings`, `/admin`, `/notifications`, `/partnerships`, `/reviews`
+### Route Protection (defined in `src/middleware.ts`)
+**Protected routes** (require auth): `/dashboard`, `/strengths`, `/team`, `/directory`, `/marketplace`, `/mentorship`, `/shoutouts`, `/challenges`, `/cards`, `/leaderboard`, `/feed`, `/settings`, `/admin`, `/notifications`, `/partnerships`, `/reviews`
 
-Auth routes redirect to dashboard if logged in: `/auth/login`, `/auth/register`
+**Auth routes** redirect to dashboard if logged in: `/auth/login`, `/auth/register`
 
 ## API Patterns
 
@@ -119,15 +116,7 @@ return apiErrors.rateLimited();       // 429
 ```
 
 ### API Error Codes
-| Code | HTTP Status |
-|------|-------------|
-| BAD_REQUEST | 400 |
-| UNAUTHORIZED | 401 |
-| FORBIDDEN | 403 |
-| NOT_FOUND | 404 |
-| VALIDATION_ERROR | 422 |
-| RATE_LIMITED | 429 |
-| INTERNAL_ERROR | 500 |
+`BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `VALIDATION_ERROR` (422), `RATE_LIMITED` (429), `INTERNAL_ERROR` (500)
 
 ### API Route Template
 ```typescript
@@ -193,14 +182,14 @@ await prisma.model.create({
 
 ## Code Standards
 
-1. **NO mock data** - Real database connections only
-2. **NO placeholders** - Every function fully implemented
-3. **NO hardcoded values** - Environment variables only
-4. **Complete error handling** - Production-grade try/catch
-5. **Full validation** - Input validation with Zod
-6. **Security built-in** - Parameterized queries, XSS prevention
-7. **Modal dialogs** - Use `@radix-ui/react-alert-dialog` instead of browser alerts
-8. **Full-stack completeness** - Every backend feature needs frontend UI
+- **NO mock data** - Real database connections only
+- **NO placeholders** - Every function fully implemented
+- **NO hardcoded values** - Environment variables only
+- **Complete error handling** - Production-grade try/catch
+- **Full validation** - Input validation with Zod
+- **Security built-in** - Parameterized queries, XSS prevention
+- **Modal dialogs** - Use `@radix-ui/react-alert-dialog` instead of browser `alert()`/`confirm()`
+- **Full-stack completeness** - Every backend feature needs frontend UI (API → Service → Component → Page)
 
 ## Common Patterns
 
@@ -355,21 +344,22 @@ return result.toDataStreamResponse();
 
 Frontend uses `useChat` hook from `@ai-sdk/react` for streaming responses.
 
-### AI Endpoints
-Located in `src/app/api/ai/`:
-- `chat` - General strengths coaching chat with conversation persistence
-- `enhance-shoutout` - Improve shoutout messages
-- `generate-bio` - Create strength-based bios
-- `recognition-starters` / `recognition-prompts` - Suggest recognition text
-- `team-narrative` - Generate team strength stories
-- `gap-recommendations` - Suggest how to address team gaps
-- `development-insights` - Personal development suggestions
-- `partnership-reasoning` - Explain why two people work well together
-- `mentorship-guide` - Mentorship conversation guides
-- `match-skill-request` - Find team members for skill requests
-- `goals/suggest` - Suggest performance review goals
-- `improve-skill-request` - Enhance skill request descriptions
-- `executive-summary` - Generate team executive summaries
+### AI Endpoints (`src/app/api/ai/`)
+| Endpoint | Purpose |
+|----------|---------|
+| `chat` | General strengths coaching chat with conversation persistence |
+| `enhance-shoutout` | Improve shoutout messages |
+| `generate-bio` | Create strength-based bios |
+| `recognition-starters`, `recognition-prompts` | Suggest recognition text |
+| `team-narrative` | Generate team strength stories |
+| `gap-recommendations` | Suggest how to address team gaps |
+| `development-insights` | Personal development suggestions |
+| `partnership-reasoning` | Explain why two people work well together |
+| `mentorship-guide` | Mentorship conversation guides |
+| `match-skill-request` | Find team members for skill requests |
+| `goals/suggest` | Suggest performance review goals |
+| `improve-skill-request` | Enhance skill request descriptions |
+| `executive-summary` | Generate team executive summaries |
 
 AI usage is tracked in `AIUsageLog` table with token counts and costs.
 
@@ -422,3 +412,16 @@ session.user = {
 ```
 
 Type augmentations are defined in `src/lib/auth/config.ts`.
+
+## Quick Reference: Key Files
+
+| File | Purpose |
+|------|---------|
+| `prisma/schema.prisma` | Database schema (source of truth) |
+| `src/lib/auth/config.ts` | NextAuth config with session type augmentations |
+| `src/lib/api/response.ts` | Standardized API response helpers |
+| `src/lib/prisma.ts` | Prisma client singleton |
+| `src/constants/strengths-data.ts` | All 34 themes, 4 domains, blind spots, keywords |
+| `src/middleware.ts` | Route protection logic |
+| `src/components/layout/DashboardLayout.tsx` | Main navigation wrapper |
+| `tailwind.config.ts` | Domain colors and custom animations |

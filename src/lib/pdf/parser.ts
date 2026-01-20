@@ -1,12 +1,31 @@
 import pdfParse from "pdf-parse";
 import { ALL_THEME_NAMES, THEMES, DOMAINS, getDomainForTheme } from "@/constants/strengths-data";
 
+// NEW: Strength blend interface - how this strength pairs with another Top 5 theme
+export interface StrengthBlend {
+  pairedTheme: string;      // e.g., "Strategic"
+  pairedThemeSlug: string;  // e.g., "strategic"
+  description: string;      // The description of how they blend together
+}
+
+// NEW: Apply section with tagline and action items from "Apply Your [Strength] to Succeed"
+export interface ApplySection {
+  tagline: string;           // The motivational tagline/quote
+  actionItems: string[];     // 2 action items for applying the strength
+}
+
 export interface ParsedTheme {
   name: string;
   slug: string;
   domain: string;
   rank: number;
   personalizedDescription?: string;
+  // NEW: Array of personalized insight paragraphs from "Why Your [Strength] Is Unique"
+  personalizedInsights?: string[];
+  // NEW: How this strength blends with other Top 5 themes
+  strengthBlends?: StrengthBlend[];
+  // NEW: Apply section with tagline and action items
+  applySection?: ApplySection;
 }
 
 export interface ParsedStrengthsReport {
@@ -93,12 +112,21 @@ function extractThemes(text: string): ParsedTheme[] {
       seenThemes.add(theme.slug);
       const domain = getDomainForTheme(theme.slug);
 
+      // Extract all personalized content for this theme
+      const personalizedDescription = extractDescriptionForTheme(text, theme.name, match.index);
+      const personalizedInsights = extractPersonalizedInsights(text, theme.name, match.index);
+      const strengthBlends = extractStrengthBlends(text, theme.name, match.index);
+      const applySection = extractApplySection(text, theme.name, match.index);
+
       themes.push({
         name: theme.name,
         slug: theme.slug,
         domain: domain?.slug || "executing",
         rank: themes.length + 1,
-        personalizedDescription: extractDescriptionForTheme(text, theme.name, match.index),
+        personalizedDescription,
+        personalizedInsights: personalizedInsights.length > 0 ? personalizedInsights : undefined,
+        strengthBlends: strengthBlends.length > 0 ? strengthBlends : undefined,
+        applySection,
       });
     }
   }
@@ -192,6 +220,264 @@ function extractDescriptionForTheme(text: string, themeName: string, startIndex:
     if (description.length > 30 && description.length < 600) {
       return description;
     }
+  }
+
+  return undefined;
+}
+
+// NEW: Extract all personalized insights from "Why Your [Strength] Is Unique" section
+function extractPersonalizedInsights(text: string, themeName: string, startIndex: number): string[] {
+  const insights: string[] = [];
+
+  // Look for text after the theme name, up to a reasonable limit
+  const afterTheme = text.substring(startIndex, startIndex + 8000);
+
+  // Look for the "Why Your [Theme] Is Unique" section header
+  // Pattern variations: "WHY YOUR ACHIEVER IS UNIQUE", "Why Your Achiever Is Unique", etc.
+  const escapedTheme = themeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const sectionHeaderPattern = new RegExp(`why\\s+your\\s+${escapedTheme}\\s+is\\s+unique`, "i");
+  const sectionMatch = afterTheme.match(sectionHeaderPattern);
+
+  if (!sectionMatch || sectionMatch.index === undefined) {
+    return insights;
+  }
+
+  // Get text after the header
+  const afterHeader = afterTheme.substring(sectionMatch.index + sectionMatch[0].length);
+
+  // Find the end of the insights section - typically ends at the next major section
+  // Look for "How [Theme] Blends" or "Apply Your [Theme]" or the next theme number
+  const sectionEndPatterns = [
+    new RegExp(`how\\s+${escapedTheme}\\s+blends`, "i"),
+    new RegExp(`apply\\s+your\\s+${escapedTheme}`, "i"),
+    /\n\s*\d+\.\s*[A-Z][a-z]+\s*®?\s*\n/,  // Next theme pattern
+    /CliftonStrengths®?\s*for/i,
+    /Copyright\s+/i,
+  ];
+
+  let sectionEndIndex = afterHeader.length;
+  for (const pattern of sectionEndPatterns) {
+    const match = afterHeader.match(pattern);
+    if (match && match.index !== undefined && match.index < sectionEndIndex) {
+      sectionEndIndex = match.index;
+    }
+  }
+
+  const insightsText = afterHeader.substring(0, sectionEndIndex);
+
+  // Extract paragraphs that start with common Gallup insight starters
+  // These typically start with: "Driven by your talents", "By nature", "Instinctively",
+  // "Chances are good", "It's very likely", "Because of your strengths"
+  const insightPatterns = [
+    /Driven by your talents[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+    /By nature[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+    /Instinctively[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+    /Chances are good[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+    /It's very likely[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+    /Because of your strengths[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*/gi,
+  ];
+
+  for (const pattern of insightPatterns) {
+    const matches = insightsText.matchAll(pattern);
+    for (const match of matches) {
+      let insight = match[0].trim();
+      // Clean up and validate
+      if (insight.length > 30 && insight.length < 800) {
+        // Remove trailing whitespace and newlines
+        insight = insight.replace(/\s+/g, ' ').trim();
+        if (!insights.includes(insight)) {
+          insights.push(insight);
+        }
+      }
+    }
+  }
+
+  // Also try to extract paragraph-style insights (sentences starting after a newline)
+  // These capture paragraphs that might start differently
+  const paragraphPattern = /\n\s*([A-Z][^.!?]*(?:you|your|yourself)[^.!?]*[.!?](?:\s*[^.!?]*[.!?])*)/gi;
+  const paragraphs = insightsText.matchAll(paragraphPattern);
+  for (const match of paragraphs) {
+    let insight = match[1].trim();
+    if (insight.length > 50 && insight.length < 800) {
+      insight = insight.replace(/\s+/g, ' ').trim();
+      if (!insights.includes(insight)) {
+        insights.push(insight);
+      }
+    }
+  }
+
+  // Limit to ~5 insights and sort by appearance order
+  return insights.slice(0, 5);
+}
+
+// NEW: Extract strength blend pairings from "How [Theme] Blends With Your Other Top Five"
+function extractStrengthBlends(text: string, themeName: string, startIndex: number): StrengthBlend[] {
+  const blends: StrengthBlend[] = [];
+
+  const afterTheme = text.substring(startIndex, startIndex + 10000);
+
+  // Look for the blends section header
+  // Pattern: "HOW ACHIEVER BLENDS WITH YOUR OTHER TOP FIVE" or similar
+  const escapedTheme = themeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blendsHeaderPattern = new RegExp(`how\\s+${escapedTheme}\\s+blends\\s+with\\s+your\\s+other\\s+top\\s+five`, "i");
+  const headerMatch = afterTheme.match(blendsHeaderPattern);
+
+  if (!headerMatch || headerMatch.index === undefined) {
+    return blends;
+  }
+
+  // Get text after the header
+  const afterHeader = afterTheme.substring(headerMatch.index + headerMatch[0].length);
+
+  // Find the end of the blends section
+  const sectionEndPatterns = [
+    new RegExp(`apply\\s+your\\s+${escapedTheme}`, "i"),
+    /\n\s*\d+\.\s*[A-Z][a-z]+\s*®?\s*\n/,  // Next theme pattern
+    /CliftonStrengths®?\s*for/i,
+    /why\s+your\s+\w+\s+is\s+unique/i,  // Next theme's unique section
+  ];
+
+  let sectionEndIndex = Math.min(afterHeader.length, 3000);
+  for (const pattern of sectionEndPatterns) {
+    const match = afterHeader.match(pattern);
+    if (match && match.index !== undefined && match.index < sectionEndIndex) {
+      sectionEndIndex = match.index;
+    }
+  }
+
+  const blendsText = afterHeader.substring(0, sectionEndIndex);
+
+  // Pattern to match blend pairings: "ACHIEVER + STRATEGIC" followed by description
+  // The format is typically: THEME1 + THEME2 followed by a paragraph
+  const themeNames = ALL_THEME_NAMES.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const blendPattern = new RegExp(
+    `(${themeNames.join("|")})\\s*\\+\\s*(${themeNames.join("|")})\\s*([^+]+?)(?=(?:${themeNames.join("|")})\\s*\\+|$)`,
+    "gi"
+  );
+
+  const matches = blendsText.matchAll(blendPattern);
+  for (const match of matches) {
+    const theme1 = match[1].trim();
+    const theme2 = match[2].trim();
+    let description = match[3].trim();
+
+    // Clean up description
+    description = description.replace(/\s+/g, ' ').trim();
+
+    // Determine which is the paired theme (not the current theme)
+    const pairedThemeName = theme1.toLowerCase() === themeName.toLowerCase() ? theme2 : theme1;
+    const pairedTheme = findTheme(pairedThemeName);
+
+    if (pairedTheme && description.length > 20 && description.length < 600) {
+      blends.push({
+        pairedTheme: pairedTheme.name,
+        pairedThemeSlug: pairedTheme.slug,
+        description,
+      });
+    }
+  }
+
+  return blends.slice(0, 4);  // Typically 4 blends (with the other Top 5)
+}
+
+// NEW: Extract apply section from "Apply Your [Theme] to Succeed"
+function extractApplySection(text: string, themeName: string, startIndex: number): ApplySection | undefined {
+  const afterTheme = text.substring(startIndex, startIndex + 10000);
+
+  // Look for the apply section header
+  const escapedTheme = themeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const applyHeaderPattern = new RegExp(`apply\\s+your\\s+${escapedTheme}\\s+to\\s+succeed`, "i");
+  const headerMatch = afterTheme.match(applyHeaderPattern);
+
+  if (!headerMatch || headerMatch.index === undefined) {
+    return undefined;
+  }
+
+  // Get text after the header
+  const afterHeader = afterTheme.substring(headerMatch.index + headerMatch[0].length);
+
+  // Find the end of the apply section
+  const sectionEndPatterns = [
+    /\n\s*\d+\.\s*[A-Z][a-z]+\s*®?\s*\n/,  // Next theme pattern
+    /CliftonStrengths®?\s*for/i,
+    /why\s+your\s+\w+\s+is\s+unique/i,
+    /how\s+\w+\s+blends/i,
+    /Copyright\s+/i,
+  ];
+
+  let sectionEndIndex = Math.min(afterHeader.length, 2000);
+  for (const pattern of sectionEndPatterns) {
+    const match = afterHeader.match(pattern);
+    if (match && match.index !== undefined && match.index < sectionEndIndex) {
+      sectionEndIndex = match.index;
+    }
+  }
+
+  const applyText = afterHeader.substring(0, sectionEndIndex);
+
+  // Extract tagline - usually in quotes or emphasized at the start
+  // Patterns: "Tagline text here." or *Tagline text here.*
+  let tagline = "";
+  const taglinePatterns = [
+    /"([^"]+)"/,                          // Quoted text
+    /'([^']+)'/,                          // Single quoted text
+    /[""]([^""]+)[""]/,                   // Smart quotes
+    /\n\s*\*([^*]+)\*\s*\n/,             // Asterisk emphasized
+    /\n\s*([A-Z][^.!?]{20,100}[.!?])\s*\n/,  // Capitalized sentence on its own line
+  ];
+
+  for (const pattern of taglinePatterns) {
+    const match = applyText.match(pattern);
+    if (match && match[1]) {
+      tagline = match[1].trim();
+      if (tagline.length > 10 && tagline.length < 200) {
+        break;
+      }
+    }
+  }
+
+  // Extract action items - usually 2 bulleted or numbered items
+  const actionItems: string[] = [];
+
+  // Look for bullet points or numbered items
+  const bulletPatterns = [
+    /[•●○►]\s*([^•●○►\n]+)/g,                    // Bullet points
+    /\d+[.)]\s*([^0-9\n][^\n]{30,300})/g,        // Numbered items
+    /[-–—]\s*([A-Z][^\n]{30,300})/g,             // Dash items
+  ];
+
+  for (const pattern of bulletPatterns) {
+    const matches = applyText.matchAll(pattern);
+    for (const match of matches) {
+      let item = match[1].trim();
+      item = item.replace(/\s+/g, ' ').trim();
+      if (item.length > 30 && item.length < 400 && !actionItems.includes(item)) {
+        actionItems.push(item);
+      }
+    }
+    if (actionItems.length >= 2) break;
+  }
+
+  // If we couldn't find action items with bullets, try finding sentences that start with action verbs
+  if (actionItems.length < 2) {
+    const actionVerbPattern = /\n\s*((?:Look for|Seek out|Consider|Try|Focus on|Make sure|Partner with|Use your|Apply your|Leverage your|Share your)[^.!?]*[.!?])/gi;
+    const matches = applyText.matchAll(actionVerbPattern);
+    for (const match of matches) {
+      let item = match[1].trim();
+      item = item.replace(/\s+/g, ' ').trim();
+      if (item.length > 30 && item.length < 400 && !actionItems.includes(item)) {
+        actionItems.push(item);
+      }
+      if (actionItems.length >= 2) break;
+    }
+  }
+
+  // Only return if we have meaningful content
+  if (tagline || actionItems.length > 0) {
+    return {
+      tagline: tagline || "",
+      actionItems: actionItems.slice(0, 2),
+    };
   }
 
   return undefined;

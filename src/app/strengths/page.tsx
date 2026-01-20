@@ -18,15 +18,25 @@ import {
   Brain,
   Zap,
   RefreshCw,
+  Link2,
+  Quote,
+  CheckSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { DomainSlug } from "@/constants/strengths-data";
+import type { StrengthBlend, ApplySection } from "@/types";
 
 interface Strength {
   id: string;
   rank: number;
   personalizedDescription: string | null;
+  // NEW: Array of personalized insight paragraphs
+  personalizedInsights?: string[];
+  // NEW: How this strength blends with other Top 5 themes
+  strengthBlends?: StrengthBlend[] | null;
+  // NEW: Apply section with tagline and action items
+  applySection?: ApplySection | null;
   theme: {
     slug: string;
     name: string;
@@ -349,8 +359,37 @@ export default function MyStrengthsPage() {
               {/* Expanded content */}
               {isExpanded && (
                 <CardContent className="pt-0 space-y-6">
-                  {/* Full Description */}
-                  {strength.theme.fullDescription && (
+                  {/* Personalized Insights Section - prioritize over generic */}
+                  {strength.personalizedInsights && strength.personalizedInsights.length > 0 ? (
+                    <div className="p-4 rounded-xl bg-domain-influencing/10 border border-domain-influencing/20">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-3 text-domain-influencing">
+                        <Sparkles className="h-4 w-4" />
+                        Why Your {strength.theme.name} Is Unique
+                      </div>
+                      <div className="space-y-3">
+                        {strength.personalizedInsights.map((insight, idx) => (
+                          <p
+                            key={idx}
+                            className="text-sm text-muted-foreground leading-relaxed"
+                          >
+                            {insight}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : strength.personalizedDescription ? (
+                    // Fallback to single personalized description
+                    <div className="p-4 rounded-xl bg-domain-influencing/10 border border-domain-influencing/20">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-2 text-domain-influencing">
+                        <Sparkles className="h-4 w-4" />
+                        Your Personal Insight
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {strength.personalizedDescription}
+                      </p>
+                    </div>
+                  ) : strength.theme.fullDescription && (
+                    // Fallback to generic description
                     <div className="p-4 rounded-xl bg-muted/30">
                       <div className="flex items-center gap-2 text-sm font-medium mb-2">
                         <BookOpen className="h-4 w-4 text-domain-strategic" />
@@ -362,16 +401,65 @@ export default function MyStrengthsPage() {
                     </div>
                   )}
 
-                  {/* Personalized Description */}
-                  {strength.personalizedDescription && (
-                    <div className="p-4 rounded-xl bg-domain-influencing/10 border border-domain-influencing/20">
-                      <div className="flex items-center gap-2 text-sm font-medium mb-2 text-domain-influencing">
-                        <Sparkles className="h-4 w-4" />
-                        Your Personal Insight
+                  {/* NEW: Strength Blends Section */}
+                  {strength.strengthBlends && strength.strengthBlends.length > 0 && (
+                    <div className="p-4 rounded-xl bg-domain-relationship/10 border border-domain-relationship/20">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-3 text-domain-relationship">
+                        <Link2 className="h-4 w-4" />
+                        How {strength.theme.name} Blends With Your Other Strengths
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {strength.personalizedDescription}
-                      </p>
+                      <div className="grid gap-3">
+                        {strength.strengthBlends.map((blend, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 rounded-lg bg-white dark:bg-background border border-domain-relationship/20"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-sm">{strength.theme.name}</span>
+                              <span className="text-muted-foreground">+</span>
+                              <span className="font-medium text-sm text-domain-relationship">
+                                {blend.pairedTheme}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                              {blend.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NEW: Apply Section */}
+                  {strength.applySection && (strength.applySection.tagline || strength.applySection.actionItems.length > 0) && (
+                    <div className="p-4 rounded-xl bg-domain-strategic/10 border border-domain-strategic/20">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-3 text-domain-strategic">
+                        <Target className="h-4 w-4" />
+                        Apply Your {strength.theme.name} to Succeed
+                      </div>
+                      {strength.applySection.tagline && (
+                        <div className="mb-4 pl-4 border-l-2 border-domain-strategic/50">
+                          <div className="flex items-start gap-2">
+                            <Quote className="h-4 w-4 text-domain-strategic flex-shrink-0 mt-0.5" />
+                            <p className="text-sm italic text-muted-foreground">
+                              {strength.applySection.tagline}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {strength.applySection.actionItems.length > 0 && (
+                        <ul className="space-y-2">
+                          {strength.applySection.actionItems.map((item, idx) => (
+                            <li
+                              key={idx}
+                              className="text-sm text-muted-foreground flex items-start gap-2"
+                            >
+                              <CheckSquare className="h-4 w-4 text-domain-strategic flex-shrink-0 mt-0.5" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   )}
 
@@ -397,8 +485,8 @@ export default function MyStrengthsPage() {
                       </div>
                     )}
 
-                    {/* Action Items */}
-                    {strength.theme.actionItems.length > 0 && (
+                    {/* Generic Action Items - only show if no personalized apply section */}
+                    {(!strength.applySection || strength.applySection.actionItems.length === 0) && strength.theme.actionItems.length > 0 && (
                       <div className="p-4 rounded-xl bg-domain-strategic/10 border border-domain-strategic/20">
                         <div className="flex items-center gap-2 text-sm font-medium mb-3 text-domain-strategic">
                           <Lightbulb className="h-4 w-4" />
@@ -419,8 +507,8 @@ export default function MyStrengthsPage() {
                     )}
                   </div>
 
-                  {/* Works Well With */}
-                  {strength.theme.worksWith.length > 0 && (
+                  {/* Works Well With - only show if no blends section */}
+                  {(!strength.strengthBlends || strength.strengthBlends.length === 0) && strength.theme.worksWith.length > 0 && (
                     <div className="p-4 rounded-xl bg-domain-relationship/10 border border-domain-relationship/20">
                       <div className="flex items-center gap-2 text-sm font-medium mb-3 text-domain-relationship">
                         <UserPlus className="h-4 w-4" />
