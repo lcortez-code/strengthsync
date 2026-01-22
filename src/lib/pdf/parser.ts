@@ -235,11 +235,7 @@ function extractPersonalizedInsights(text: string, themeName: string, _startInde
   const sectionHeaderPattern = new RegExp(`why\\s+your\\s+${escapedTheme}\\s+is\\s+unique`, "i");
   const sectionMatch = text.match(sectionHeaderPattern);
 
-  console.log(`[Parser] Looking for "Why Your ${themeName} Is Unique" section in full text...`);
-  console.log(`[Parser] Section match found:`, !!sectionMatch, sectionMatch?.index);
-
   if (!sectionMatch || sectionMatch.index === undefined) {
-    console.log(`[Parser] No "Why Your ${themeName} Is Unique" section found`);
     return insights;
   }
 
@@ -320,9 +316,6 @@ function extractStrengthBlends(text: string, themeName: string, _startIndex: num
   const blendsHeaderPattern = new RegExp(`how\\s+${escapedTheme}\\s+blends\\s+with\\s+your\\s+other\\s+top\\s+five`, "i");
   const headerMatch = text.match(blendsHeaderPattern);
 
-  console.log(`[Parser] Looking for "How ${themeName} Blends" section...`);
-  console.log(`[Parser] Blends section found:`, !!headerMatch, headerMatch?.index);
-
   if (!headerMatch || headerMatch.index === undefined) {
     return blends;
   }
@@ -387,9 +380,6 @@ function extractApplySection(text: string, themeName: string, _startIndex: numbe
   const escapedTheme = themeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const applyHeaderPattern = new RegExp(`apply\\s+your\\s+${escapedTheme}\\s+to\\s+succeed`, "i");
   const headerMatch = text.match(applyHeaderPattern);
-
-  console.log(`[Parser] Looking for "Apply Your ${themeName} to Succeed" section...`);
-  console.log(`[Parser] Apply section found:`, !!headerMatch, headerMatch?.index);
 
   if (!headerMatch || headerMatch.index === undefined) {
     return undefined;
@@ -524,30 +514,9 @@ export async function parseCliftonStrengthsPDF(buffer: Buffer): Promise<ParsedSt
   const text = data.text;
 
   // Debug logging
-  console.log("[PDF Parser] Extracted text length:", text.length);
-  console.log("[PDF Parser] Text preview (first 500 chars):", text.substring(0, 500));
-
-  // Debug: Look for key section patterns in the text
-  const hasWhyUnique = /why\s+your\s+\w+\s+is\s+unique/i.test(text);
-  const hasBlends = /blends\s+with\s+your\s+other\s+top\s+five/i.test(text);
-  const hasApply = /apply\s+your\s+\w+\s+to\s+succeed/i.test(text);
-  console.log("[PDF Parser] Section detection - Why Unique:", hasWhyUnique, "Blends:", hasBlends, "Apply:", hasApply);
-
-  // Debug: Show a sample of text around line 1000-2000 chars where insights might be
-  console.log("[PDF Parser] Text sample (1000-2000 chars):", text.substring(1000, 2000));
-
   // Extract data
   const participantName = extractParticipantName(text);
   const themes = extractThemes(text);
-
-  console.log("[PDF Parser] Extracted participant name:", participantName);
-  console.log("[PDF Parser] Extracted themes count:", themes.length);
-  console.log("[PDF Parser] Extracted themes:", themes.map(t => t.name));
-
-  // Debug: Log what was extracted for each theme
-  themes.forEach(t => {
-    console.log(`[PDF Parser] Theme ${t.name}: insights=${t.personalizedInsights?.length || 0}, blends=${t.strengthBlends?.length || 0}, applySection=${!!t.applySection}`);
-  });
 
   const reportType = determineReportType(themes.length);
   const confidence = calculateConfidence(themes);
