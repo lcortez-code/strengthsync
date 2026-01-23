@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
               userId: user.id,
               organizationId: session.user.organizationId,
               role: "MEMBER",
-              status: "PENDING",
+              status: "ACTIVE",
               strengthsDocumentId: document.id,
             },
             include: { user: true },
