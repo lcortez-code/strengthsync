@@ -30,6 +30,7 @@ export async function GET(
       },
       include: {
         participants: {
+          where: { member: { organizationId, status: "ACTIVE" } },
           include: {
             member: {
               include: {
@@ -75,7 +76,6 @@ export async function GET(
         name: p.member.user.fullName,
         avatarUrl: p.member.user.avatarUrl,
         score: p.score,
-        progress: p.progress,
         completedAt: p.completedAt?.toISOString(),
         topStrengths: p.member.strengths.map((s) => ({
           name: s.theme.name,
@@ -87,7 +87,7 @@ export async function GET(
       myScore: myParticipation?.score || 0,
     });
   } catch (error) {
-    console.error("Error fetching challenge:", error);
+    console.error("Error fetching challenge:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch challenge");
   }
 }

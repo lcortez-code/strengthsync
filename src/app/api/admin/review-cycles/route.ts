@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(formattedCycles);
   } catch (error) {
-    console.error("[Get Review Cycles Error]", error);
+    console.error("[Get Review Cycles Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch review cycles");
   }
 }
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       createdAt: cycle.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("[Create Review Cycle Error]", error);
+    console.error("[Create Review Cycle Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create review cycle");
   }
 }

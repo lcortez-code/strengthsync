@@ -327,7 +327,7 @@ export async function checkAndAwardBadges(
 
     return newlyEarned;
   } catch (error) {
-    console.error("[Badge Engine] Fatal error:", error);
+    console.error("[Badge Engine] Fatal error:");
     return [];
   }
 }

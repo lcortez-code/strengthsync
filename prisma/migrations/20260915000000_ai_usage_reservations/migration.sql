@@ -1,0 +1,3 @@
+ALTER TABLE "ai_usage_logs"
+ADD COLUMN "reservedTokens" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "settledAt" TIMESTAMP(3);

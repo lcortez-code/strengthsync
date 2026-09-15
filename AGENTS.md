@@ -1,19 +1,9 @@
 # Repository guidance
 
-## Issue Tracking
+## Issue tracking
 
-This project uses **bd (beads)** for issue tracking.
-Run `bd prime` for workflow context, or install hooks (`bd hooks install`) for auto-injection.
-
-**Quick reference:**
-- `bd ready` - Find unblocked work
-- `bd create "Title" --type task --priority 2` - Create issue
-- `bd close <id>` - Complete work
-- `bd dolt push` - Push beads to remote
-
-For full workflow details: `bd prime`
-
-- Use `bd update <id> --status in_progress --json` to claim work.
+- This repository uses `bd` (Beads). When `.beads/` is present, run `bd prime` before issue-tracking work.
+- Use `bd ready --json` to find unblocked work, `bd update <id> --status in_progress --json` to claim it, and `bd close <id> --reason "Done" --json` when complete.
 - Record newly discovered work with `bd create ... --deps discovered-from:<parent-id> --json`.
 - Do not duplicate Beads issues in a second tracking system.
 - If the user authorizes a commit, include the corresponding `.beads/issues.jsonl` update with the code change.

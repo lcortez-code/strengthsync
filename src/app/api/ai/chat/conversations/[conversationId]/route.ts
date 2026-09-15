@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const memberId = session.user.memberId;
-    if (!memberId) {
+    if (!memberId || !session.user.organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -53,7 +53,7 @@ export async function GET(
 
     return apiSuccess(conversation);
   } catch (error) {
-    console.error("[Get Conversation Error]", error);
+    console.error("[Get Conversation Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to get conversation");
   }
 }
@@ -70,7 +70,7 @@ export async function PATCH(
     }
 
     const memberId = session.user.memberId;
-    if (!memberId) {
+    if (!memberId || !session.user.organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -78,7 +78,7 @@ export async function PATCH(
     const body = await request.json();
     const { title } = body;
 
-    if (!title || typeof title !== "string") {
+    if (!title || typeof title !== "string" || !title.trim() || title.length > 200) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Title is required");
     }
 
@@ -107,12 +107,12 @@ export async function PATCH(
 
     return apiSuccess(conversation);
   } catch (error) {
-    console.error("[Rename Conversation Error]", error);
+    console.error("[Rename Conversation Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to rename conversation");
   }
 }
 
-// DELETE - Delete conversation (soft delete)
+// DELETE - Erase owned conversation content and retain an empty tombstone
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> }
@@ -124,34 +124,27 @@ export async function DELETE(
     }
 
     const memberId = session.user.memberId;
-    if (!memberId) {
+    if (!memberId || !session.user.organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
     const { conversationId } = await params;
 
-    // Verify ownership
-    const existing = await prisma.aIConversation.findFirst({
-      where: {
-        id: conversationId,
-        memberId,
-        status: "ACTIVE",
-      },
+    const removed = await prisma.$transaction(async (tx) => {
+      // Lock the same row used by streaming persistence before removing messages.
+      const result = await tx.aIConversation.updateMany({
+        where: { id: conversationId, memberId, organizationId: session.user.organizationId, status: "ACTIVE" },
+        data: { status: "DELETED", title: "Deleted conversation" },
+      });
+      if (result.count !== 1) return false;
+      await tx.aIMessage.deleteMany({ where: { conversationId } });
+      return true;
     });
-
-    if (!existing) {
-      return apiError(ApiErrorCode.NOT_FOUND, "Conversation not found");
-    }
-
-    // Soft delete by setting status to DELETED
-    await prisma.aIConversation.update({
-      where: { id: conversationId },
-      data: { status: "DELETED" },
-    });
+    if (!removed) return apiError(ApiErrorCode.NOT_FOUND, "Conversation not found");
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("[Delete Conversation Error]", error);
+    console.error("[Delete Conversation Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete conversation");
   }
 }

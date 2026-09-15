@@ -117,7 +117,7 @@ export async function GET(
 
     return apiSuccess(formattedCycle);
   } catch (error) {
-    console.error("[Get Review Cycle Error]", error);
+    console.error("[Get Review Cycle Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch review cycle");
   }
 }
@@ -190,7 +190,7 @@ export async function PATCH(
           .map((m) => ({
             cycleId,
             memberId: m.id,
-            status: "NOT_STARTED" as const,
+            status: cycle.includeSelfAssessment ? "NOT_STARTED" as const : "MANAGER_REVIEW" as const,
           }));
 
         if (newReviews.length > 0) {
@@ -241,7 +241,7 @@ export async function PATCH(
       includeStrengthsContext: updated.includeStrengthsContext,
     });
   } catch (error) {
-    console.error("[Update Review Cycle Error]", error);
+    console.error("[Update Review Cycle Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update review cycle");
   }
 }
@@ -296,7 +296,7 @@ export async function DELETE(
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("[Delete Review Cycle Error]", error);
+    console.error("[Delete Review Cycle Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete review cycle");
   }
 }

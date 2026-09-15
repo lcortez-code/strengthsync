@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       total: formattedReviews.length,
     });
   } catch (error) {
-    console.error("[Get Reviews Error]", error);
+    console.error("[Get Reviews Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch reviews");
   }
 }

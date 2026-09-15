@@ -15,6 +15,10 @@ export {
 // Rate Limiting
 export {
   RATE_LIMITS,
+  reserveAIRequest,
+  estimateTokenAllowance,
+  type AIAdmissionOptions,
+  type AIAdmissionResult,
   checkUserRateLimit,
   checkOrganizationRateLimit,
   checkTokenLimit,

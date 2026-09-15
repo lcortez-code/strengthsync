@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(response);
   } catch (error) {
-    console.error("[Health Metrics Error]", error);
+    console.error("[Health Metrics Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch health metrics");
   }
 }

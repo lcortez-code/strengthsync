@@ -1,7 +1,7 @@
-import { generateText, streamText, generateObject, CoreMessage } from "ai";
+import { generateText, streamText, generateObject, zodSchema, CoreMessage } from "ai";
 import { z } from "zod";
 import { openai, getFeatureSettings, AIFeature, isAIConfigured } from "./client";
-import { checkAllLimits, RateLimitResult } from "./rate-limiter";
+import { reserveAIRequest, estimateTokenAllowance, RateLimitResult } from "./rate-limiter";
 import { logUsage, TokenUsage } from "./token-tracker";
 import { getPromptTemplate, renderTemplate, TemplateVariables } from "./prompts";
 import { prisma } from "@/lib/prisma";
@@ -10,7 +10,6 @@ export interface AIServiceOptions {
   memberId: string;
   organizationId: string;
   feature: AIFeature;
-  skipRateLimitCheck?: boolean;
 }
 
 export interface GenerateOptions extends AIServiceOptions {
@@ -62,21 +61,16 @@ export async function generate(
     return { success: false, error: aiReady.reason };
   }
 
-  // Check rate limits
-  if (!options.skipRateLimitCheck) {
-    const rateLimitResult = await checkAllLimits(memberId, organizationId);
-    if (!rateLimitResult.allowed) {
-      return {
-        success: false,
-        error: rateLimitResult.reason,
-        rateLimitResult,
-      };
-    }
-  }
-
   const settings = getFeatureSettings(feature);
   const temperature = options.temperature ?? settings.temperature;
   const maxTokens = options.maxTokens ?? settings.maxTokens;
+  const admission = await reserveAIRequest({
+    memberId, organizationId, feature, endpoint: `/api/ai/${feature}`, model: settings.model,
+    reservedTokens: estimateTokenAllowance({ system: systemPrompt, prompt }, maxTokens),
+  });
+  if (!admission.allowed || !admission.reservationId) {
+    return { success: false, error: admission.reason, rateLimitResult: admission };
+  }
 
   try {
     const result = await generateText({
@@ -85,6 +79,7 @@ export async function generate(
       prompt,
       temperature,
       maxOutputTokens: maxTokens,
+      maxRetries: 0,
     });
 
     const latencyMs = Date.now() - startTime;
@@ -100,13 +95,13 @@ export async function generate(
 
     // Log usage
     await logUsage({
+      reservationId: admission.reservationId,
       memberId,
       organizationId,
       feature,
       endpoint: `/api/ai/${feature}`,
       usage,
-      requestSummary: prompt.substring(0, 200),
-      responseSummary: result.text.substring(0, 200),
+      usageKnown: result.usage.inputTokens != null && result.usage.outputTokens != null,
       success: true,
     });
 
@@ -119,10 +114,11 @@ export async function generate(
     };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = "AI generation failed. Please try again later.";
 
     // Log failed attempt
     await logUsage({
+      reservationId: admission.reservationId,
       memberId,
       organizationId,
       feature,
@@ -134,12 +130,12 @@ export async function generate(
         model: settings.model,
         latencyMs,
       },
-      requestSummary: prompt.substring(0, 200),
+      usageKnown: false,
       success: false,
       errorMessage,
     });
 
-    console.error(`[AI Service] Error in ${feature}:`, error);
+    console.error(`[AI Service] Generation failed for ${feature}`);
     return { success: false, error: errorMessage };
   }
 }
@@ -178,18 +174,15 @@ export async function generateStructured<T extends z.ZodType>(
     return { success: false, error: aiReady.reason };
   }
 
-  if (!options.skipRateLimitCheck) {
-    const rateLimitResult = await checkAllLimits(memberId, organizationId);
-    if (!rateLimitResult.allowed) {
-      return {
-        success: false,
-        error: rateLimitResult.reason,
-        rateLimitResult,
-      };
-    }
-  }
-
   const settings = getFeatureSettings(feature);
+  const maxTokens = options.maxTokens ?? settings.maxTokens;
+  const admission = await reserveAIRequest({
+    memberId, organizationId, feature, endpoint: `/api/ai/${feature}`, model: settings.model,
+    reservedTokens: estimateTokenAllowance({ system: systemPrompt, prompt, schema: zodSchema(schema).jsonSchema }, maxTokens),
+  });
+  if (!admission.allowed || !admission.reservationId) {
+    return { success: false, error: admission.reason, rateLimitResult: admission };
+  }
 
   try {
     const result = await generateObject({
@@ -199,6 +192,8 @@ export async function generateStructured<T extends z.ZodType>(
       schema,
       schemaName: options.schemaName,
       mode: "json", // Use JSON mode for better compatibility
+      maxOutputTokens: maxTokens,
+      maxRetries: 0,
     });
 
     const latencyMs = Date.now() - startTime;
@@ -213,13 +208,13 @@ export async function generateStructured<T extends z.ZodType>(
     };
 
     await logUsage({
+      reservationId: admission.reservationId,
       memberId,
       organizationId,
       feature,
       endpoint: `/api/ai/${feature}`,
       usage,
-      requestSummary: prompt.substring(0, 200),
-      responseSummary: JSON.stringify(result.object).substring(0, 200),
+      usageKnown: result.usage.inputTokens != null && result.usage.outputTokens != null,
       success: true,
     });
 
@@ -230,9 +225,10 @@ export async function generateStructured<T extends z.ZodType>(
     };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = "AI generation failed. Please try again later.";
 
     await logUsage({
+      reservationId: admission.reservationId,
       memberId,
       organizationId,
       feature,
@@ -244,11 +240,12 @@ export async function generateStructured<T extends z.ZodType>(
         model: settings.model,
         latencyMs,
       },
+      usageKnown: false,
       success: false,
       errorMessage,
     });
 
-    console.error(`[AI Service] Structured generation error in ${feature}:`, error);
+    console.error(`[AI Service] Structured generation failed for ${feature}`);
     return { success: false, error: errorMessage };
   }
 }
@@ -263,48 +260,70 @@ export async function stream(options: StreamOptions) {
     throw new Error(aiReady.reason);
   }
 
-  if (!options.skipRateLimitCheck) {
-    const rateLimitResult = await checkAllLimits(memberId, organizationId);
-    if (!rateLimitResult.allowed) {
-      throw new Error(rateLimitResult.reason);
-    }
+  if (!messages.every((message) => typeof message.content === "string")) {
+    throw new Error("AI streaming supports text messages only");
   }
 
   const settings = getFeatureSettings(feature);
-
-  const result = streamText({
-    model: openai(settings.model),
-    system: systemPrompt,
-    messages,
-    temperature: options.temperature ?? settings.temperature,
-    maxOutputTokens: options.maxTokens ?? settings.maxTokens,
-    onFinish: async ({ usage, text }) => {
-      const latencyMs = Date.now() - startTime;
-      const streamPromptTokens = usage.inputTokens ?? 0;
-      const streamCompletionTokens = usage.outputTokens ?? 0;
-      const tokenUsage: TokenUsage = {
-        promptTokens: streamPromptTokens,
-        completionTokens: streamCompletionTokens,
-        totalTokens: streamPromptTokens + streamCompletionTokens,
-        model: settings.model,
-        latencyMs,
-      };
-
-      await logUsage({
-        memberId,
-        organizationId,
-        feature,
-        endpoint: `/api/ai/${feature}`,
-        usage: tokenUsage,
-        responseSummary: text.substring(0, 200),
-        success: true,
-      });
-
-      onFinish?.(tokenUsage);
-    },
+  const maxTokens = options.maxTokens ?? settings.maxTokens;
+  const admission = await reserveAIRequest({
+    memberId, organizationId, feature, endpoint: `/api/ai/${feature}`, model: settings.model,
+    reservedTokens: estimateTokenAllowance({ system: systemPrompt, messages }, maxTokens),
   });
+  if (!admission.allowed || !admission.reservationId) throw new Error(admission.reason);
+  const reservationId = admission.reservationId;
 
-  return result;
+  const recordIncomplete = async () => {
+    await logUsage({
+      reservationId, memberId, organizationId, feature, endpoint: `/api/ai/${feature}`,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, model: settings.model, latencyMs: Date.now() - startTime },
+      usageKnown: false,
+      success: false, errorMessage: "Generation did not complete; allowance retained",
+    });
+  };
+
+  try {
+    const result = streamText({
+      model: openai(settings.model),
+      system: systemPrompt,
+      messages,
+      temperature: options.temperature ?? settings.temperature,
+      maxOutputTokens: maxTokens,
+      maxRetries: 0,
+      onError: recordIncomplete,
+      onAbort: recordIncomplete,
+      onFinish: async ({ usage, text }) => {
+        const latencyMs = Date.now() - startTime;
+        const streamPromptTokens = usage.inputTokens ?? 0;
+        const streamCompletionTokens = usage.outputTokens ?? 0;
+        const tokenUsage: TokenUsage = {
+          promptTokens: streamPromptTokens,
+          completionTokens: streamCompletionTokens,
+          totalTokens: streamPromptTokens + streamCompletionTokens,
+          model: settings.model,
+          latencyMs,
+        };
+
+        await logUsage({
+          reservationId,
+          memberId,
+          organizationId,
+          feature,
+          endpoint: `/api/ai/${feature}`,
+          usage: tokenUsage,
+          usageKnown: usage.inputTokens != null && usage.outputTokens != null,
+          success: true,
+        });
+
+        onFinish?.(tokenUsage);
+      },
+    });
+
+    return result;
+  } catch (error) {
+    await recordIncomplete();
+    throw error;
+  }
 }
 
 // Chat service for conversation management
@@ -312,6 +331,7 @@ export class ChatService {
   private memberId: string;
   private organizationId: string;
   private conversationId: string | null = null;
+  private creatingConversation: Promise<string> | null = null;
 
   constructor(memberId: string, organizationId: string, conversationId?: string) {
     this.memberId = memberId;
@@ -319,22 +339,45 @@ export class ChatService {
     this.conversationId = conversationId || null;
   }
 
+  private conversationScope() {
+    return {
+      id: this.conversationId || "",
+      memberId: this.memberId,
+      organizationId: this.organizationId,
+      status: "ACTIVE" as const,
+      member: { organizationId: this.organizationId, status: "ACTIVE" as const },
+    };
+  }
+
   // Create or get conversation
   async getOrCreateConversation(title?: string): Promise<string> {
     if (this.conversationId) {
+      const conversation = await prisma.aIConversation.findFirst({
+        where: this.conversationScope(), select: { id: true },
+      });
+      if (!conversation) throw new Error("Conversation is unavailable or no longer accessible");
       return this.conversationId;
     }
 
-    const conversation = await prisma.aIConversation.create({
-      data: {
-        memberId: this.memberId,
-        organizationId: this.organizationId,
-        title: title || "New conversation",
-      },
-    });
-
-    this.conversationId = conversation.id;
-    return conversation.id;
+    // Share creation across concurrent calls on this instance and keep membership
+    // active until the new conversation commits.
+    if (!this.creatingConversation) {
+      this.creatingConversation = prisma.$transaction(async (tx) => {
+        const members = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "organization_members"
+          WHERE "id" = ${this.memberId} AND "organizationId" = ${this.organizationId} AND "status" = 'ACTIVE'
+          FOR SHARE
+        `;
+        if (members.length !== 1) throw new Error("Active organization membership is required");
+        const conversation = await tx.aIConversation.create({
+          data: { memberId: this.memberId, organizationId: this.organizationId, title: title || "New conversation" },
+          select: { id: true },
+        });
+        return conversation.id;
+      }).then((id) => { this.conversationId = id; return id; });
+    }
+    try { return await this.creatingConversation; }
+    finally { this.creatingConversation = null; }
   }
 
   // Get conversation history
@@ -343,9 +386,12 @@ export class ChatService {
       return [];
     }
 
+    await this.getOrCreateConversation();
     const messages = await prisma.aIMessage.findMany({
-      where: { conversationId: this.conversationId },
+      // Keep authorization in the history query in case access changed after the check.
+      where: { conversationId: this.conversationId, conversation: this.conversationScope() },
       orderBy: { createdAt: "asc" },
+      select: { role: true, content: true },
     });
 
     return messages.map((m) => ({
@@ -360,21 +406,29 @@ export class ChatService {
     content: string,
     usage?: Partial<TokenUsage>
   ): Promise<void> {
-    if (!this.conversationId) {
-      await this.getOrCreateConversation();
-    }
-
-    await prisma.aIMessage.create({
-      data: {
-        conversationId: this.conversationId!,
-        role,
-        content,
-        promptTokens: usage?.promptTokens || 0,
-        completionTokens: usage?.completionTokens || 0,
-        totalTokens: usage?.totalTokens || 0,
-        model: usage?.model,
-        latencyMs: usage?.latencyMs,
-      },
+    const conversationId = await this.getOrCreateConversation();
+    await prisma.$transaction(async (tx) => {
+      const members = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "organization_members"
+        WHERE "id" = ${this.memberId} AND "organizationId" = ${this.organizationId} AND "status" = 'ACTIVE'
+        FOR SHARE
+      `;
+      if (members.length !== 1) throw new Error("Active organization membership is required");
+      // This conditional write locks the owned conversation until message creation
+      // completes, preventing deletion or reassignment between authorization and save.
+      const writable = await tx.aIConversation.updateMany({
+        where: this.conversationScope(), data: { updatedAt: new Date() },
+      });
+      if (writable.count !== 1) throw new Error("Conversation is unavailable or no longer accessible");
+      await tx.aIMessage.create({
+        data: {
+          conversationId, role, content,
+          promptTokens: usage?.promptTokens || 0,
+          completionTokens: usage?.completionTokens || 0,
+          totalTokens: usage?.totalTokens || 0,
+          model: usage?.model, latencyMs: usage?.latencyMs,
+        },
+      });
     });
   }
 

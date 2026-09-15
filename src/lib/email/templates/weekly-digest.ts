@@ -2,6 +2,7 @@
  * Weekly Digest Email Template
  * A comprehensive weekly summary of strengths activity
  */
+import { escapeHtml, safeEmailUrl } from "@/lib/email/html";
 
 // Domain colors from the app
 const DOMAIN_COLORS = {
@@ -87,60 +88,62 @@ function formatDate(date: Date): string {
 }
 
 function getDomainColor(slug?: string): string {
-  if (!slug) return "#6B7280";
+  if (!slug || !Object.hasOwn(DOMAIN_COLORS, slug)) return "#6B7280";
   return DOMAIN_COLORS[slug as keyof typeof DOMAIN_COLORS] || "#6B7280";
 }
 
-function generateShoutoutCard(shoutout: ShoutoutSummary): string {
+function generateShoutoutCard(shoutout: ShoutoutSummary, appUrl: string): string {
   const domainColor = getDomainColor(shoutout.domainSlug);
-  const initial = shoutout.giverName.charAt(0).toUpperCase();
+  const initial = escapeHtml(shoutout.giverName.charAt(0).toUpperCase());
+  const avatarUrl = shoutout.giverAvatarUrl ? safeEmailUrl(shoutout.giverAvatarUrl, appUrl) : "";
 
   return `
     <div style="background: #F9FAFB; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
       <div style="display: flex; align-items: flex-start;">
         <div style="width: 40px; height: 40px; border-radius: 50%; background: ${domainColor}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; margin-right: 12px; flex-shrink: 0;">
           ${
-            shoutout.giverAvatarUrl
-              ? `<img src="${shoutout.giverAvatarUrl}" alt="${shoutout.giverName}" style="width: 40px; height: 40px; border-radius: 50%;" />`
+            avatarUrl
+              ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(shoutout.giverName)}" style="width: 40px; height: 40px; border-radius: 50%;" />`
               : initial
           }
         </div>
         <div style="flex: 1;">
-          <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${shoutout.giverName}</div>
+          <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${escapeHtml(shoutout.giverName)}</div>
           ${
             shoutout.themeName
-              ? `<span style="display: inline-block; background: ${domainColor}20; color: ${domainColor}; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-bottom: 8px;">${shoutout.themeName}</span>`
+              ? `<span style="display: inline-block; background: ${domainColor}20; color: ${domainColor}; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-bottom: 8px;">${escapeHtml(shoutout.themeName)}</span>`
               : ""
           }
-          <p style="color: #4B5563; margin: 0; font-size: 14px; line-height: 1.5;">"${shoutout.message}"</p>
+          <p style="color: #4B5563; margin: 0; font-size: 14px; line-height: 1.5;">"${escapeHtml(shoutout.message)}"</p>
         </div>
       </div>
     </div>
   `;
 }
 
-function generateBadgeCard(badge: BadgeEarned): string {
+function generateBadgeCard(badge: BadgeEarned, appUrl: string): string {
+  const iconUrl = safeEmailUrl(badge.iconUrl, appUrl);
   return `
     <div style="text-align: center; padding: 12px;">
-      <img src="${badge.iconUrl}" alt="${badge.name}" style="width: 48px; height: 48px; margin-bottom: 8px;" />
-      <div style="font-weight: 600; color: #111827; font-size: 14px;">${badge.name}</div>
-      <div style="color: #6B7280; font-size: 12px;">${badge.description}</div>
+      ${iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="${escapeHtml(badge.name)}" style="width: 48px; height: 48px; margin-bottom: 8px;" />` : ""}
+      <div style="font-weight: 600; color: #111827; font-size: 14px;">${escapeHtml(badge.name)}</div>
+      <div style="color: #6B7280; font-size: 12px;">${escapeHtml(badge.description)}</div>
     </div>
   `;
 }
 
 function generateChallengeCard(challenge: ChallengeProgress): string {
-  const progressWidth = Math.min(challenge.progress, 100);
+  const progressWidth = Number.isFinite(challenge.progress) ? Math.max(0, Math.min(challenge.progress, 100)) : 0;
   return `
     <div style="background: #F9FAFB; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="font-weight: 600; color: #111827;">${challenge.name}</span>
-        <span style="color: #6B7280; font-size: 12px;">Ends ${challenge.endsAt}</span>
+        <span style="font-weight: 600; color: #111827;">${escapeHtml(challenge.name)}</span>
+        <span style="color: #6B7280; font-size: 12px;">Ends ${escapeHtml(challenge.endsAt)}</span>
       </div>
       <div style="background: #E5E7EB; border-radius: 4px; height: 8px; overflow: hidden;">
         <div style="background: linear-gradient(90deg, #7B68EE, #F5A623); height: 100%; width: ${progressWidth}%; transition: width 0.3s;"></div>
       </div>
-      <div style="text-align: right; margin-top: 4px; font-size: 12px; color: #6B7280;">${challenge.progress}% complete</div>
+      <div style="text-align: right; margin-top: 4px; font-size: 12px; color: #6B7280;">${escapeHtml(challenge.progress)}% complete</div>
     </div>
   `;
 }
@@ -155,13 +158,13 @@ function generateLeaderboardRow(
     2: "#C0C0C0",
     3: "#CD7F32",
   };
-  const rankColor = rankColors[contributor.rank] || "#6B7280";
+  const rankColor = Object.hasOwn(rankColors, contributor.rank) ? rankColors[contributor.rank] : "#6B7280";
 
   return `
     <tr style="background: ${bgColor};">
-      <td style="padding: 8px 12px; font-weight: ${isCurrentUser ? "600" : "400"}; color: ${rankColor};">#${contributor.rank}</td>
-      <td style="padding: 8px 12px; font-weight: ${isCurrentUser ? "600" : "400"}; color: #111827;">${contributor.name}${isCurrentUser ? " (You)" : ""}</td>
-      <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #7B68EE;">${contributor.points.toLocaleString()}</td>
+      <td style="padding: 8px 12px; font-weight: ${isCurrentUser ? "600" : "400"}; color: ${rankColor};">#${escapeHtml(contributor.rank)}</td>
+      <td style="padding: 8px 12px; font-weight: ${isCurrentUser ? "600" : "400"}; color: #111827;">${escapeHtml(contributor.name)}${isCurrentUser ? " (You)" : ""}</td>
+      <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #7B68EE;">${escapeHtml(contributor.points.toLocaleString())}</td>
     </tr>
   `;
 }
@@ -184,9 +187,11 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
     topContributors,
     suggestedActions,
     aiNarrative,
-    appUrl,
-    unsubscribeUrl,
   } = data;
+
+  const appUrl = safeEmailUrl(data.appUrl) || "https://strengthsync.app";
+  const unsubscribeUrl = safeEmailUrl(data.unsubscribeUrl, appUrl) || appUrl;
+  const preferencesUrl = safeEmailUrl(`${appUrl.replace(/\/$/, "")}/settings/notifications`);
 
   const firstName = userName.split(" ")[0];
   const dateRange = `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
@@ -199,7 +204,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
       <h2 style="color: #111827; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center;">
         <span style="margin-right: 8px;">🎉</span> Recognition Received (${shoutoutsReceived.length})
       </h2>
-      ${shoutoutsReceived.map(generateShoutoutCard).join("")}
+      ${shoutoutsReceived.map((shoutout) => generateShoutoutCard(shoutout, appUrl)).join("")}
     </div>
   `
       : "";
@@ -212,7 +217,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
         <span style="margin-right: 8px;">🏆</span> Badges Earned
       </h2>
       <div style="display: flex; flex-wrap: wrap; gap: 16px; background: #F9FAFB; border-radius: 8px; padding: 16px;">
-        ${badgesEarned.map(generateBadgeCard).join("")}
+        ${badgesEarned.map((badge) => generateBadgeCard(badge, appUrl)).join("")}
       </div>
     </div>
   `
@@ -222,7 +227,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
     ? `
     <div style="background: #FEF3C7; border-radius: 8px; padding: 16px; margin-bottom: 32px;">
       <div style="font-weight: 600; color: #92400E; margin-bottom: 8px;">📍 Almost there!</div>
-      <div style="color: #78350F;">You're ${badgeProgress.current}/${badgeProgress.required} toward earning the <strong>${badgeProgress.badgeName}</strong> badge!</div>
+      <div style="color: #78350F;">You're ${escapeHtml(badgeProgress.current)}/${escapeHtml(badgeProgress.required)} toward earning the <strong>${escapeHtml(badgeProgress.badgeName)}</strong> badge!</div>
     </div>
   `
     : "";
@@ -244,7 +249,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
       ? `
     <div style="margin-bottom: 32px;">
       <h2 style="color: #111827; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center;">
-        <span style="margin-right: 8px;">🏅</span> Leaderboard${userRank ? ` (You're #${userRank})` : ""}
+        <span style="margin-right: 8px;">🏅</span> Leaderboard${userRank ? ` (You're #${escapeHtml(userRank)})` : ""}
       </h2>
       <table style="width: 100%; border-collapse: collapse; background: #F9FAFB; border-radius: 8px; overflow: hidden;">
         <thead>
@@ -270,7 +275,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
         <span style="margin-right: 8px;">💡</span> Suggested Actions
       </h2>
       <ul style="margin: 0; padding: 0 0 0 20px; color: #4B5563;">
-        ${suggestedActions.map((action) => `<li style="margin-bottom: 8px;">${action}</li>`).join("")}
+        ${suggestedActions.map((action) => `<li style="margin-bottom: 8px;">${escapeHtml(action)}</li>`).join("")}
       </ul>
     </div>
   `
@@ -289,14 +294,14 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
     <!-- Header -->
     <div style="background: linear-gradient(135deg, #7B68EE 0%, #F5A623 50%, #4A90D9 75%, #7CB342 100%); border-radius: 12px 12px 0 0; padding: 32px; text-align: center;">
       <h1 style="color: white; margin: 0 0 8px 0; font-size: 28px; font-weight: 700;">StrengthSync</h1>
-      <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px;">Weekly Digest • ${dateRange}</p>
+      <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px;">Weekly Digest • ${escapeHtml(dateRange)}</p>
     </div>
 
     <!-- Main Content -->
     <div style="background: white; padding: 32px; border-radius: 0 0 12px 12px;">
       <!-- Greeting -->
       <p style="font-size: 16px; color: #374151; margin: 0 0 24px 0;">
-        Hi ${firstName}! 👋 Here's what happened this week at <strong>${organizationName}</strong>.
+        Hi ${escapeHtml(firstName)}! 👋 Here's what happened this week at <strong>${escapeHtml(organizationName)}</strong>.
       </p>
 
       ${aiNarrative ? `
@@ -306,7 +311,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
           <span style="font-size: 16px; margin-right: 8px;">✨</span>
           <span style="font-weight: 600; color: #5B21B6; font-size: 14px;">Your Week in Strengths</span>
         </div>
-        <p style="color: #374151; margin: 0; font-size: 15px; line-height: 1.6; font-style: italic;">${aiNarrative}</p>
+        <p style="color: #374151; margin: 0; font-size: 15px; line-height: 1.6; font-style: italic;">${escapeHtml(aiNarrative)}</p>
       </div>
       ` : ""}
 
@@ -317,15 +322,15 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
           <div style="font-size: 12px; color: #6B21A8;">Received</div>
         </div>
         <div style="flex: 1; min-width: 120px; background: #FEF3C7; border-radius: 8px; padding: 16px; text-align: center;">
-          <div style="font-size: 24px; font-weight: 700; color: #F59E0B;">${shoutoutsGiven}</div>
+          <div style="font-size: 24px; font-weight: 700; color: #F59E0B;">${escapeHtml(shoutoutsGiven)}</div>
           <div style="font-size: 12px; color: #92400E;">Given</div>
         </div>
         <div style="flex: 1; min-width: 120px; background: #DBEAFE; border-radius: 8px; padding: 16px; text-align: center;">
-          <div style="font-size: 24px; font-weight: 700; color: #2563EB;">+${pointsEarned}</div>
+          <div style="font-size: 24px; font-weight: 700; color: #2563EB;">+${escapeHtml(pointsEarned)}</div>
           <div style="font-size: 12px; color: #1E40AF;">Points</div>
         </div>
         <div style="flex: 1; min-width: 120px; background: #D1FAE5; border-radius: 8px; padding: 16px; text-align: center;">
-          <div style="font-size: 24px; font-weight: 700; color: #059669;">${currentStreak}🔥</div>
+          <div style="font-size: 24px; font-weight: 700; color: #059669;">${escapeHtml(currentStreak)}🔥</div>
           <div style="font-size: 12px; color: #065F46;">Streak</div>
         </div>
       </div>
@@ -339,7 +344,7 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
 
       <!-- CTA Button -->
       <div style="text-align: center; margin: 32px 0;">
-        <a href="${appUrl}" style="display: inline-block; background: linear-gradient(135deg, #7B68EE, #4A90D9); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        <a href="${escapeHtml(appUrl)}" style="display: inline-block; background: linear-gradient(135deg, #7B68EE, #4A90D9); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
           Open StrengthSync
         </a>
       </div>
@@ -347,18 +352,18 @@ export function generateWeeklyDigestHtml(data: WeeklyDigestData): string {
       <!-- Total Points -->
       <div style="text-align: center; padding: 16px; background: #F9FAFB; border-radius: 8px; margin-bottom: 24px;">
         <span style="color: #6B7280;">Your total points:</span>
-        <span style="font-weight: 700; color: #7B68EE; font-size: 20px; margin-left: 8px;">${totalPoints.toLocaleString()}</span>
+        <span style="font-weight: 700; color: #7B68EE; font-size: 20px; margin-left: 8px;">${escapeHtml(totalPoints.toLocaleString())}</span>
       </div>
     </div>
 
     <!-- Footer -->
     <div style="text-align: center; padding: 24px; color: #6B7280; font-size: 12px;">
       <p style="margin: 0 0 8px 0;">
-        You're receiving this because you're a member of ${organizationName} on StrengthSync.
+        You're receiving this because you're a member of ${escapeHtml(organizationName)} on StrengthSync.
       </p>
       <p style="margin: 0;">
-        <a href="${unsubscribeUrl}" style="color: #6B7280; text-decoration: underline;">Unsubscribe</a> or
-        <a href="${appUrl}/settings/notifications" style="color: #6B7280; text-decoration: underline;">manage email preferences</a>
+        <a href="${escapeHtml(unsubscribeUrl)}" style="color: #6B7280; text-decoration: underline;">Unsubscribe</a> or
+        <a href="${escapeHtml(preferencesUrl)}" style="color: #6B7280; text-decoration: underline;">manage email preferences</a>
       </p>
     </div>
   </div>
@@ -382,9 +387,10 @@ export function generateWeeklyDigestText(data: WeeklyDigestData): string {
     activeChallenges,
     suggestedActions,
     aiNarrative,
-    appUrl,
-    unsubscribeUrl,
   } = data;
+
+  const appUrl = safeEmailUrl(data.appUrl) || "https://strengthsync.app";
+  const unsubscribeUrl = safeEmailUrl(data.unsubscribeUrl, appUrl) || appUrl;
 
   const firstName = userName.split(" ")[0];
   const dateRange = `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;

@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/config";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { BadgeCelebrationProvider } from "@/components/providers/BadgeCelebrationProvider";
@@ -51,15 +53,17 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background antialiased">
-        <SessionProvider>
+        <SessionProvider session={session}>
           <ThemeProvider defaultTheme="light" storageKey="strengthsync-theme">
             <BadgeCelebrationProvider>
               {children}

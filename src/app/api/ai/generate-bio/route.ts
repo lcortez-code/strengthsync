@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const { style, interests, additionalContext } = validation.data;
 
     // Get user's full context
-    const userContext = await getMinimalUserContext(memberId);
+    const userContext = await getMinimalUserContext(memberId, organizationId);
 
     if (!userContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "User profile not found");
@@ -90,7 +90,7 @@ Top CliftonStrengths: ${userContext.topStrengths.join(", ")}`;
     });
 
     if (!result.success) {
-      console.error("[AI Generate Bio] Generation failed:", result.error);
+      console.error("[AI Generate Bio] Generation failed:");
       return apiError(ApiErrorCode.INTERNAL_ERROR, result.error || "Failed to generate bio");
     }
 
@@ -102,7 +102,7 @@ Top CliftonStrengths: ${userContext.topStrengths.join(", ")}`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Generate Bio Error]", error);
+    console.error("[AI Generate Bio Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate bio");
   }
 }

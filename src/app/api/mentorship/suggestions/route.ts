@@ -1,3 +1,4 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const limit = boundedPageNumber(searchParams.get("limit"), 10, 100);
 
     // Get current user's strengths
     const myStrengths = await prisma.memberStrength.findMany({
@@ -165,7 +166,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("Error fetching mentor suggestions:", error);
+    console.error("Error fetching mentor suggestions:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch suggestions");
   }
 }

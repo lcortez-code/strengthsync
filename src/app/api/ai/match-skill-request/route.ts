@@ -200,7 +200,7 @@ Rank the top ${limit} best matches. For each match, explain specifically which o
     });
 
     if (!result.success) {
-      console.error("[AI Skill Request Match] Generation failed:", result.error);
+      console.error("[AI Skill Request Match] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to analyze skill request matches"
@@ -242,7 +242,7 @@ Rank the top ${limit} best matches. For each match, explain specifically which o
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Skill Request Match Error]", error);
+    console.error("[AI Skill Request Match Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to match skill request");
   }
 }

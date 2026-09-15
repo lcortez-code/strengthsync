@@ -354,6 +354,24 @@ test("unknown arguments fail without echoing argument names or values", (t) => {
   assert.equal(scannerOutput(result), "Expected no arguments or --staged.\n");
 });
 
+test("repository scan rejects a tracked file beneath a symlinked ancestor without reading outside bytes", (t) => {
+  const repository = createRepository(t);
+  const outside = mkdtempSync(join(tmpdir(), "strengthsync-ancestor-outside-"));
+  t.after(() => rmSync(outside, { force: true, recursive: true }));
+  mkdirSync(join(repository, "nested"));
+  writeFileSync(join(repository, "nested", "config.txt"), "safe staged content");
+  git(repository, ["add", "--", "nested/config.txt"]);
+  rmSync(join(repository, "nested"), { recursive: true });
+  writeFileSync(join(outside, "config.txt"), postgresqlUrl("outside:private@db.vendor.test/app"));
+  symlinkSync(outside, join(repository, "nested"));
+  const result = runScanner(repository);
+  assert.equal(result.status, 1);
+  assert.equal(scannerOutput(result), "nested/config.txt: unable to read tracked bytes\n");
+  const staged = runScanner(repository, ["--staged"]);
+  assert.equal(staged.status, 0);
+  assert.equal(scannerOutput(staged), "");
+});
+
 test("Git failures report only the command and exit status", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "strengthsync-secret-nongit-"));
   t.after(() => rmSync(directory, { force: true, recursive: true }));
@@ -423,4 +441,22 @@ test("hook installer reports a concise local Git configuration failure", (t) => 
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
   assert.equal(result.stderr, "git config exited with status 128.\n");
+});
+
+test("unstaged clean-file deletion scans the index without blocking the repository scan", (t) => {
+  const repository = createRepository(t);
+  writeFileSync(join(repository, "obsolete.json"), "{}\n");
+  git(repository, ["add", "--", "obsolete.json"]);
+  unlinkSync(join(repository, "obsolete.json"));
+  assert.equal(runScanner(repository).status, 0);
+});
+
+test("unstaged deletion cannot hide a credential still present in the index", (t) => {
+  const repository = createRepository(t);
+  writeFileSync(join(repository, "obsolete.env"), postgresqlUrl("test_user:test_password@db.vendor.test/app"));
+  git(repository, ["add", "--", "obsolete.env"]);
+  unlinkSync(join(repository, "obsolete.env"));
+  const result = runScanner(repository);
+  assert.equal(result.status, 1);
+  assert.equal(scannerOutput(result), "obsolete.env:1 postgresql-credentials\n");
 });

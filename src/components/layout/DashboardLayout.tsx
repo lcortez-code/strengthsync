@@ -85,7 +85,8 @@ const adminNavigation = [
   { name: "Upload Strengths", href: "/admin/upload", icon: Upload },
   { name: "Bulk Import", href: "/admin/import", icon: UserPlus },
   { name: "Excel Import", href: "/admin/excel-import", icon: FileSpreadsheet },
-  { name: "Strength Constants", href: "/admin/constants", icon: Database },
+  { name: "Strength Constants", href: "/admin/constants", icon: Database, platformOnly: true },
+  { name: "AI Prompts", href: "/admin/ai/prompts", icon: Bot, platformOnly: true },
 ];
 
 interface DashboardLayoutProps {
@@ -228,7 +229,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
 
           {/* Admin section - visible to OWNER and ADMIN only (not MANAGER) */}
-          {isAdmin && (
+          {(isAdmin || session?.user?.isPlatformAdmin) && (
             <>
               <div className="px-3 pt-4 pb-2">
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -236,7 +237,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </span>
               </div>
               <div className="space-y-1">
-                {adminNavigation.map((item) => {
+                {adminNavigation.filter((item) => item.platformOnly ? session?.user?.isPlatformAdmin : isAdmin).map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <Link

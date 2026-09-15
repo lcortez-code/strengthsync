@@ -1,3 +1,4 @@
+import { csvCell } from "@/lib/api/csv";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -136,14 +137,14 @@ export async function GET(request: NextRequest) {
       ]);
 
       const csvContent = [
-        `# Team Analytics Report - ${org?.name}`,
+        csvCell(`# Team Analytics Report - ${org?.name}`),
         `# Export Date: ${report.exportDate}`,
         `# Total Members: ${report.summary.totalMembers}`,
         `# Members with Strengths: ${report.summary.membersWithStrengths}`,
         "",
         headers.join(","),
         ...rows.map((row) =>
-          row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")
+          row.map(csvCell).join(",")
         ),
       ].join("\n");
 
@@ -161,7 +162,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error exporting analytics:", error);
+    console.error("Error exporting analytics:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to export analytics");
   }
 }

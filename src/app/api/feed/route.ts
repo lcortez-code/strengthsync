@@ -1,8 +1,10 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiListSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
+import { publicFeedWhere } from "@/lib/social/feed";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,13 +22,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type"); // Filter by type
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const page = boundedPageNumber(searchParams.get("page"), 1, 10000);
+    const limit = boundedPageNumber(searchParams.get("limit"), 20, 100);
 
-    const where: Record<string, unknown> = { organizationId };
+    const where = publicFeedWhere(organizationId);
 
     if (type) {
-      where.itemType = type;
+      where.itemType = type as NonNullable<typeof where.itemType>;
     }
 
     const total = await prisma.feedItem.count({ where });
@@ -176,7 +178,7 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching feed:", error);
+    console.error("Error fetching feed:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch feed");
   }
 }

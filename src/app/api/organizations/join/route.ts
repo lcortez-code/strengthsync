@@ -1,3 +1,4 @@
+import { readAuthJson, protectAuthRequest, authProtectionResponse, inviteCodeSchema } from "@/lib/auth/request-protection";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
 
 const joinSchema = z.object({
-  inviteCode: z.string().min(1, "Invite code is required"),
+  inviteCode: inviteCodeSchema,
 });
 
 // POST - Join organization (for authenticated users)
@@ -18,7 +19,8 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const body = await request.json();
+    await protectAuthRequest("organization-join", request.headers, session.user.id);
+    const body = await readAuthJson(request);
     const validation = joinSchema.safeParse(body);
 
     if (!validation.success) {
@@ -101,7 +103,9 @@ export async function POST(request: NextRequest) {
       "Successfully joined organization"
     );
   } catch (error) {
-    console.error("[Join Organization Error]", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Organization join failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to join organization");
   }
 }

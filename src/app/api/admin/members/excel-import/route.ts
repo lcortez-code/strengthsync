@@ -1,3 +1,5 @@
+import { DocumentParseError } from "@/lib/documents/limits";
+import { readUploadForm, UploadLimitError } from "@/lib/api/upload";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
     const isPreview = searchParams.get("preview") === "true";
 
     // Parse FormData
-    const formData = await request.formData();
+    const formData = await readUploadForm(request);
     const file = formData.get("file") as File | null;
 
     if (!file) {
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Parse the Excel file
-    const parseResult = parseGallupExcel(buffer);
+    const parseResult = await parseGallupExcel(buffer);
 
     if (parseResult.errors.length > 0) {
       return apiError(ApiErrorCode.VALIDATION_ERROR, "Failed to parse Excel file", {
@@ -232,9 +234,9 @@ export async function POST(request: NextRequest) {
         rowResult.themeCount = strengthData.length;
         successful++;
       } catch (err) {
-        console.error(`[Excel Import] Error importing row ${row.rowNumber}:`, err);
+        console.error("Excel import row failed");
         rowResult.status = "error";
-        rowResult.message = `Import failed: ${err instanceof Error ? err.message : "Unknown error"}`;
+        rowResult.message = "Import failed. Check this row and try again.";
         failed++;
       }
 
@@ -271,7 +273,12 @@ export async function POST(request: NextRequest) {
       results,
     });
   } catch (error) {
-    console.error("[Excel Import] Error:", error);
+    if (error instanceof DocumentParseError) {
+      const code = error.code === "BUSY" ? ApiErrorCode.RATE_LIMITED : error.code === "UNAVAILABLE" ? ApiErrorCode.INTERNAL_ERROR : ApiErrorCode.VALIDATION_ERROR;
+      return apiError(code, error.message);
+    }
+    if (error instanceof UploadLimitError) return apiError(ApiErrorCode.BAD_REQUEST, error.message);
+    console.error("Excel import failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to process Excel import");
   }
 }

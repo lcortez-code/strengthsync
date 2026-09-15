@@ -140,20 +140,7 @@ function JoinOrganizationForm() {
         return;
       }
 
-      // Auto sign in
-      const result = await signIn("credentials", {
-        email: registerData.email,
-        password: registerData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        router.push("/auth/login?joined=true");
-        return;
-      }
-
-      router.push("/dashboard?welcome=true");
-      router.refresh();
+      router.push("/auth/verify-email");
     } catch (err) {
       setError("An unexpected error occurred");
       setIsLoading(false);

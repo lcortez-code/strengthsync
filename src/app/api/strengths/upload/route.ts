@@ -1,3 +1,5 @@
+import { DocumentParseError } from "@/lib/documents/limits";
+import { readUploadForm, UploadLimitError } from "@/lib/api/upload";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -16,11 +18,10 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
-    const formData = await request.formData();
+    const formData = await readUploadForm(request);
     const file = formData.get("file") as File;
     const forMemberId = formData.get("forMemberId") as string | null;
     const forUserEmail = formData.get("forUserEmail") as string | null;
-    const forUserName = formData.get("forUserName") as string | null;
     const selfUpload = formData.get("selfUpload") === "true";
 
     // Permission check:
@@ -37,9 +38,11 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.BAD_REQUEST, "PDF file required");
     }
 
-    if (file.type !== "application/pdf") {
+    if (!(file instanceof File) || file.type !== "application/pdf") {
       return apiError(ApiErrorCode.VALIDATION_ERROR, "Only PDF files are accepted");
     }
+
+    if (file.size > 10 * 1024 * 1024) return apiError(ApiErrorCode.BAD_REQUEST, "PDF exceeds the 10 MB limit");
 
     // Convert to buffer
     const arrayBuffer = await file.arrayBuffer();
@@ -75,6 +78,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Resolve an accepted membership before creating or modifying assessment records.
+    const targetMember = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: session.user.organizationId,
+        status: "ACTIVE",
+        ...(selfUpload
+          ? { id: session.user.memberId }
+          : forMemberId
+            ? { id: forMemberId }
+            : forUserEmail
+              ? { user: { email: forUserEmail.toLowerCase().trim() } }
+              : { id: session.user.memberId }),
+      },
+      include: { user: { select: { fullName: true, email: true } } },
+    });
+    if (!targetMember) {
+      return apiError(ApiErrorCode.BAD_REQUEST, "Add or invite this person from Members first. They must accept their invitation before strengths can be uploaded.");
+    }
+
     // Store document record
     const document = await prisma.strengthsDocument.create({
       data: {
@@ -86,68 +108,6 @@ export async function POST(request: NextRequest) {
         extractedData: parsed as any,
       },
     });
-
-    // Determine target member
-    let targetMember = null;
-
-    if (selfUpload) {
-      // Self-upload: assign to current user
-      targetMember = await prisma.organizationMember.findFirst({
-        where: {
-          id: session.user.memberId,
-          organizationId: session.user.organizationId,
-        },
-        include: { user: true },
-      });
-    } else if (forMemberId) {
-      // Assign to specific member (admin only)
-      targetMember = await prisma.organizationMember.findFirst({
-        where: {
-          id: forMemberId,
-          organizationId: session.user.organizationId,
-        },
-        include: { user: true },
-      });
-    } else if (forUserEmail) {
-      // Find or create user by email
-      let user = await prisma.user.findUnique({
-        where: { email: forUserEmail.toLowerCase() },
-      });
-
-      if (!user && forUserName) {
-        // Create new user (without password - they'll need to register/be invited)
-        user = await prisma.user.create({
-          data: {
-            email: forUserEmail.toLowerCase(),
-            fullName: forUserName || parsed.participantName || "Team Member",
-          },
-        });
-      }
-
-      if (user) {
-        // Find or create membership
-        targetMember = await prisma.organizationMember.findFirst({
-          where: {
-            userId: user.id,
-            organizationId: session.user.organizationId,
-          },
-          include: { user: true },
-        });
-
-        if (!targetMember) {
-          targetMember = await prisma.organizationMember.create({
-            data: {
-              userId: user.id,
-              organizationId: session.user.organizationId,
-              role: "MEMBER",
-              status: "ACTIVE",
-              strengthsDocumentId: document.id,
-            },
-            include: { user: true },
-          });
-        }
-      }
-    }
 
     // If we have a target member, update their strengths
     if (targetMember) {
@@ -219,7 +179,12 @@ export async function POST(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error("[Strengths Upload Error]", error);
+    if (error instanceof DocumentParseError) {
+      const code = error.code === "BUSY" ? ApiErrorCode.RATE_LIMITED : error.code === "UNAVAILABLE" ? ApiErrorCode.INTERNAL_ERROR : ApiErrorCode.VALIDATION_ERROR;
+      return apiError(code, error.message);
+    }
+    if (error instanceof UploadLimitError) return apiError(ApiErrorCode.BAD_REQUEST, error.message);
+    console.error("[Strengths Upload Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to process PDF");
   }
 }

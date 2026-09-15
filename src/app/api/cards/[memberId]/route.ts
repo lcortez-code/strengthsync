@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 
 export async function GET(
@@ -21,10 +22,16 @@ export async function GET(
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
+    const fullProfile = canViewFullProfile({
+      viewerRole: session.user.role,
+      viewerMemberId: session.user.memberId,
+      targetMemberId: memberId,
+    });
     const member = await prisma.organizationMember.findFirst({
       where: {
         id: memberId,
         organizationId,
+        status: "ACTIVE",
       },
       include: {
         user: {
@@ -33,10 +40,11 @@ export async function GET(
             avatarUrl: true,
             jobTitle: true,
             department: true,
-            bio: true,
+            bio: fullProfile,
           },
         },
         strengths: {
+          where: fullProfile ? undefined : { rank: { lte: 5 } },
           include: {
             theme: {
               include: {
@@ -52,10 +60,6 @@ export async function GET(
           },
           orderBy: { earnedAt: "desc" },
           take: 5,
-        },
-        shoutoutsReceived: {
-          take: 1,
-          orderBy: { createdAt: "desc" },
         },
         _count: {
           select: {
@@ -74,7 +78,7 @@ export async function GET(
 
     // Calculate domain distribution
     const domainCounts: Record<string, number> = {};
-    member.strengths.slice(0, 10).forEach((s) => {
+    member.strengths.filter((s) => s.rank <= (fullProfile ? 10 : 5)).forEach((s) => {
       const domain = s.theme.domain.slug;
       domainCounts[domain] = (domainCounts[domain] || 0) + 1;
     });
@@ -100,14 +104,15 @@ export async function GET(
       avatarUrl: member.user.avatarUrl,
       jobTitle: member.user.jobTitle,
       department: member.user.department,
-      bio: member.user.bio,
+      bio: fullProfile ? member.user.bio : null,
+      isFullProfile: fullProfile,
       primaryDomain: {
         slug: primaryDomain,
         name: primaryDomainData?.name || primaryDomain,
         colorHex: primaryDomainData?.colorHex || "#7CB342",
       },
       domainDistribution: domainCounts,
-      topStrengths: member.strengths.slice(0, 5).map((s) => ({
+      topStrengths: member.strengths.filter((s) => s.rank <= 5).map((s) => ({
         rank: s.rank,
         name: s.theme.name,
         domain: s.theme.domain.slug,
@@ -119,24 +124,24 @@ export async function GET(
         name: s.theme.name,
         domain: s.theme.domain.slug,
       })),
-      stats: {
+      stats: fullProfile ? {
         shoutoutsReceived: member._count.shoutoutsReceived,
         shoutoutsGiven: member._count.shoutoutsGiven,
         mentorshipsAsMentor: member._count.mentorshipsAsMentor,
         mentorshipsAsMentee: member._count.mentorshipsAsMentee,
         points: member.points,
         streak: member.streak,
-      },
-      badges: member.badgesEarned.map((be) => ({
+      } : null,
+      badges: fullProfile ? member.badgesEarned.map((be) => ({
         name: be.badge.name,
         iconUrl: be.badge.iconUrl,
         tier: be.badge.tier,
         earnedAt: be.earnedAt.toISOString(),
-      })),
-      joinedAt: member.joinedAt.toISOString(),
+      })) : [],
+      joinedAt: fullProfile ? member.joinedAt.toISOString() : null,
     });
   } catch (error) {
-    console.error("Error fetching card data:", error);
+    console.error("Error fetching card data:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch card data");
   }
 }

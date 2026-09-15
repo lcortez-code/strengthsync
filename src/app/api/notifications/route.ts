@@ -1,3 +1,4 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -15,8 +16,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const unreadOnly = searchParams.get("unread") === "true";
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const page = boundedPageNumber(searchParams.get("page"), 1, 10000);
+    const limit = boundedPageNumber(searchParams.get("limit"), 20, 100);
 
     const where: Record<string, unknown> = { userId };
     if (unreadOnly) {
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
       meta: { unreadCount },
     });
   } catch (error) {
-    console.error("Error fetching notifications:", error);
+    console.error("Error fetching notifications:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch notifications");
   }
 }
@@ -80,7 +81,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess({ success: true });
   } catch (error) {
-    console.error("Error marking notifications as read:", error);
+    console.error("Error marking notifications as read:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to mark notifications as read");
   }
 }

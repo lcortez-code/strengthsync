@@ -48,7 +48,10 @@ export async function POST(request: NextRequest) {
     const { message, recipientId, context } = validation.data;
 
     // Get recipient's strengths context
-    const recipientContext = await getMinimalUserContext(recipientId);
+    const recipientContext = await getMinimalUserContext(recipientId, organizationId);
+    if (!recipientContext) {
+      return apiError(ApiErrorCode.NOT_FOUND, "Recipient not found");
+    }
     const recipientStrengths = recipientContext?.topStrengths.join(", ") || "";
     const recipientName = recipientContext?.name || "the recipient";
 
@@ -94,7 +97,7 @@ Provide an enhanced version that is more impactful while staying true to the ori
     });
 
     if (!result.success) {
-      console.error("[AI Enhance Shoutout] Generation failed:", result.error);
+      console.error("[AI Enhance Shoutout] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to enhance message"
@@ -109,7 +112,7 @@ Provide an enhanced version that is more impactful while staying true to the ori
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Enhance Shoutout Error]", error);
+    console.error("[AI Enhance Shoutout Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to enhance shoutout");
   }
 }

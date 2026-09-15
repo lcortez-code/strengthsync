@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const { style, focusArea } = validation.data;
 
     // Build team context
-    const teamContext = await buildTeamContext(organizationId);
+    const teamContext = await buildTeamContext(organizationId, { viewerMemberId: memberId, viewerRole: session.user.role });
 
     if (!teamContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Organization not found");
@@ -115,7 +115,7 @@ Write in a warm, professional tone. Be specific with your insights.`;
     });
 
     if (!result.success) {
-      console.error("[AI Team Narrative] Generation failed:", result.error);
+      console.error("[AI Team Narrative] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate team narrative"
@@ -141,7 +141,7 @@ Write in a warm, professional tone. Be specific with your insights.`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Team Narrative Error]", error);
+    console.error("[AI Team Narrative Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate team narrative");
   }
 }

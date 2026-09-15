@@ -125,7 +125,7 @@ export async function GET(
       updatedAt: skillRequest.updatedAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching skill request:", error);
+    console.error("Error fetching skill request:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch skill request");
   }
 }
@@ -181,7 +181,7 @@ export async function PATCH(
       updatedAt: updated.updatedAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error updating skill request:", error);
+    console.error("Error updating skill request:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update skill request");
   }
 }
@@ -222,7 +222,7 @@ export async function DELETE(
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("Error deleting skill request:", error);
+    console.error("Error deleting skill request:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete skill request");
   }
 }

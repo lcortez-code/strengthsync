@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     const { recipientId, context } = validation.data;
 
     // Get recipient's context
-    const recipientContext = await getMinimalUserContext(recipientId);
+    const recipientContext = await getMinimalUserContext(recipientId, organizationId);
 
     if (!recipientContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Recipient not found");
@@ -82,7 +82,7 @@ Their top CliftonStrengths: ${recipientContext.topStrengths.join(", ")}`;
     });
 
     if (!result.success) {
-      console.error("[AI Recognition Starters] Generation failed:", result.error);
+      console.error("[AI Recognition Starters] Generation failed:");
       return apiError(ApiErrorCode.INTERNAL_ERROR, result.error || "Failed to generate starters");
     }
 
@@ -116,7 +116,7 @@ Their top CliftonStrengths: ${recipientContext.topStrengths.join(", ")}`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Recognition Starters Error]", error);
+    console.error("[AI Recognition Starters Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate recognition starters");
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import {
   calculateDomainComposition,
@@ -67,7 +68,15 @@ export async function GET(request: NextRequest) {
 
     const totalMembers = members.length;
     const domainComposition = calculateDomainComposition(memberStrengths, totalMembers);
-    const themeFrequency = calculateThemeFrequency(memberStrengths, totalMembers, 10);
+    const themeFrequency = calculateThemeFrequency(memberStrengths, totalMembers, 10).map((theme) => ({
+      ...theme,
+      // Keep team totals while respecting each member's profile visibility.
+      members: theme.members.filter((member) => member.rank <= 5 || canViewFullProfile({
+        viewerRole: session.user.role,
+        viewerMemberId: session.user.memberId,
+        targetMemberId: member.id,
+      })),
+    }));
 
     // Get top themes (most common in team)
     const topThemes = themeFrequency.slice(0, 10);
@@ -83,7 +92,7 @@ export async function GET(request: NextRequest) {
       themeFrequency,
     });
   } catch (error) {
-    console.error("Error fetching team composition:", error);
+    console.error("Error fetching team composition:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch team composition");
   }
 }

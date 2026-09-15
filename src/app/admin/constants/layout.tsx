@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { SessionProvider } from "@/components/providers/SessionProvider";
+import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 
 export default async function AdminConstantsLayout({
   children,
@@ -16,14 +16,9 @@ export default async function AdminConstantsLayout({
   }
 
   // Check admin role
-  const isAdmin = session.user?.role === "OWNER" || session.user?.role === "ADMIN";
-  if (!isAdmin) {
+  if (!isPlatformAdmin(session.user.id)) {
     redirect("/dashboard");
   }
 
-  return (
-    <SessionProvider session={session}>
-      <DashboardLayout>{children}</DashboardLayout>
-    </SessionProvider>
-  );
+  return <DashboardLayout>{children}</DashboardLayout>;
 }

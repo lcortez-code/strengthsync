@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(user);
   } catch (error) {
-    console.error("Error fetching profile:", error);
+    console.error("Error fetching profile:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch profile");
   }
 }
@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess(updated);
   } catch (error) {
-    console.error("Error updating profile:", error);
+    console.error("Error updating profile:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update profile");
   }
 }

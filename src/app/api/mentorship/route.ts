@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(data);
   } catch (error) {
-    console.error("Error fetching mentorships:", error);
+    console.error("Error fetching mentorships:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch mentorships");
   }
 }
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       focusAreas: mentorship.focusAreas,
     });
   } catch (error) {
-    console.error("Error creating mentorship:", error);
+    console.error("Error creating mentorship:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create mentorship request");
   }
 }

@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/Input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { safeAuthCallback } from "@/lib/auth/redirect";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = safeAuthCallback(searchParams.get("callbackUrl"));
   const error = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -36,7 +37,7 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setLoginError("Invalid email or password");
+        setLoginError(result.error === "EmailVerificationRequired" ? "Verify your email and set your password before signing in. Use the verification link below." : result.error.includes("Too many requests") ? "Too many attempts. Try again in 15 minutes." : result.error.includes("protection is unavailable") ? "Sign-in is temporarily unavailable. Try again later." : "Invalid email or password");
         setIsLoading(false);
         return;
       }
@@ -72,6 +73,8 @@ function LoginForm() {
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <Link href="/auth/verify-email" className="block text-sm underline">Verify your email or resend your setup link</Link>
+              {searchParams.get("passwordChanged") === "1" && <p role="status" className="text-sm text-muted-foreground">Your password was changed. Sign in with your new password.</p>}
               {loginError && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />

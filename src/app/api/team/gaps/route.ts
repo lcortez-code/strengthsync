@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { analyzeGaps, type MemberStrengthData } from "@/lib/strengths/analytics";
 
@@ -63,13 +64,21 @@ export async function GET(request: NextRequest) {
 
     const totalMembers = members.length;
     const gapAnalysis = analyzeGaps(memberStrengths, totalMembers);
+    gapAnalysis.underrepresentedThemes = gapAnalysis.underrepresentedThemes.map((theme) => ({
+      ...theme,
+      members: theme.members.filter((member) => member.rank <= 5 || canViewFullProfile({
+        viewerRole: session.user.role,
+        viewerMemberId: session.user.memberId,
+        targetMemberId: member.id,
+      })),
+    }));
 
     return apiSuccess({
       totalMembers,
       ...gapAnalysis,
     });
   } catch (error) {
-    console.error("Error analyzing team gaps:", error);
+    console.error("Error analyzing team gaps:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to analyze team gaps");
   }
 }

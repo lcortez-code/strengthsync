@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { checkAndAwardBadges } from "@/lib/gamification/badge-engine";
+import { configuredTeamsTenant, type TeamsIdentity } from "@/lib/integrations/teams-identity";
+import { createTeamsLinkChallenge } from "@/lib/integrations/teams-linking";
 
 /**
  * Teams Bot Command Handlers
@@ -42,24 +44,18 @@ const APP_URL = process.env.NEXTAUTH_URL || "https://strengthsync.app";
  * Resolve a Teams user ID to a StrengthSync user + member.
  * Returns null if no mapping exists.
  */
-async function resolveTeamsUser(teamsUserId: string) {
+async function resolveTeamsUser(identity: TeamsIdentity) {
   const mapping = await prisma.teamsUserMapping.findUnique({
-    where: { teamsUserId },
-    include: {
-      user: {
-        include: {
-          organizationMemberships: {
-            where: { status: "ACTIVE" },
-            take: 1,
-          },
-        },
-      },
-    },
+    where: { teamsUserId: identity.teamsUserId },
+    include: { user: { select: { fullName: true } } },
   });
 
-  if (!mapping) return null;
-
-  const membership = mapping.user.organizationMemberships[0];
+  if (!mapping?.verifiedAt || mapping.teamsTenantId !== identity.tenantId ||
+      identity.tenantId !== configuredTeamsTenant() || mapping.teamsChannelId !== identity.conversationId) return null;
+  const membership = await prisma.organizationMember.findFirst({
+    where: { userId: mapping.userId, organizationId: mapping.organizationId, status: "ACTIVE" },
+    select: { id: true, organizationId: true },
+  });
   if (!membership) return null;
 
   return {
@@ -73,7 +69,8 @@ async function resolveTeamsUser(teamsUserId: string) {
 /**
  * Build a sign-in card for unlinked Teams users.
  */
-function buildSignInCard(): AdaptiveCardResponse {
+async function buildSignInCard(identity: TeamsIdentity): Promise<AdaptiveCardResponse> {
+  const url = await createTeamsLinkChallenge(identity);
   return {
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     type: "AdaptiveCard",
@@ -87,7 +84,7 @@ function buildSignInCard(): AdaptiveCardResponse {
       },
       {
         type: "TextBlock",
-        text: "To use StrengthSync commands in Teams, you need to link your account first. Click the button below to sign in.",
+        text: "Sign in to StrengthSync and choose the organization to use in this personal chat. This link expires in 10 minutes. Only use it for your own account.",
         wrap: true,
         spacing: "Small",
       },
@@ -96,7 +93,7 @@ function buildSignInCard(): AdaptiveCardResponse {
       {
         type: "Action.OpenUrl",
         title: "Link Account",
-        url: `${APP_URL}/settings/profile?teamsLink=true`,
+        url,
       },
     ],
   };
@@ -147,6 +144,7 @@ function buildHelpCard(): AdaptiveCardResponse {
         wrap: true,
         spacing: "None",
       },
+      { type: "TextBlock", text: "**`/link`** — Link your account or choose another organization", wrap: true },
     ],
     actions: [
       {
@@ -539,12 +537,12 @@ async function handleRequestsCommand(
  * Parses the incoming message text and dispatches to the appropriate handler.
  */
 export async function handleTeamsBotCommand(
-  teamsUserId: string,
+  identity: TeamsIdentity,
   messageText: string
 ): Promise<AdaptiveCardResponse> {
   try {
     // Resolve the Teams user
-    const user = await resolveTeamsUser(teamsUserId);
+    const user = await resolveTeamsUser(identity);
 
     // Normalize the command
     const text = messageText.trim();
@@ -552,7 +550,7 @@ export async function handleTeamsBotCommand(
 
     // If no command syntax, check for help-like messages
     if (!commandMatch) {
-      if (!user) return buildSignInCard();
+      if (!user) return buildSignInCard(identity);
       return buildHelpCard();
     }
 
@@ -564,9 +562,11 @@ export async function handleTeamsBotCommand(
       return buildHelpCard();
     }
 
+    if (command === "link") return buildSignInCard(identity);
+
     // All other commands require authentication
     if (!user) {
-      return buildSignInCard();
+      return buildSignInCard(identity);
     }
 
     switch (command) {
@@ -598,7 +598,7 @@ export async function handleTeamsBotCommand(
         };
     }
   } catch (error) {
-    console.error("[Teams Bot] Command error:", error);
+    console.error("[Teams Bot] Command failed");
     return {
       $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
       type: "AdaptiveCard",

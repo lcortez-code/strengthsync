@@ -38,7 +38,7 @@ function ResetPasswordForm() {
         const data = await response.json();
 
         if (!response.ok) {
-          setError(data.message || "Invalid or expired reset link");
+          setError(data.error?.message || "Invalid or expired reset link");
           setTokenValid(false);
         } else {
           setTokenValid(true);
@@ -59,14 +59,8 @@ function ResetPasswordForm() {
     if (password.length < 8) {
       return "Password must be at least 8 characters";
     }
-    if (!/[A-Z]/.test(password)) {
-      return "Password must contain at least one uppercase letter";
-    }
-    if (!/[a-z]/.test(password)) {
-      return "Password must contain at least one lowercase letter";
-    }
-    if (!/[0-9]/.test(password)) {
-      return "Password must contain at least one number";
+    if (new TextEncoder().encode(password).length > 72) {
+      return "Password must fit within 72 UTF-8 bytes";
     }
     if (password !== confirmPassword) {
       return "Passwords do not match";
@@ -96,7 +90,7 @@ function ResetPasswordForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Failed to reset password");
+        setError(data.error?.message || "Failed to reset password");
         return;
       }
 
@@ -212,7 +206,7 @@ function ResetPasswordForm() {
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Must be at least 8 characters with uppercase, lowercase, and number
+                    Use at least 8 characters, within 72 UTF-8 bytes.
                   </p>
                 </div>
 

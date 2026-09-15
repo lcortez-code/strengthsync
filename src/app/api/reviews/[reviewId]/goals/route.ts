@@ -1,3 +1,4 @@
+import { canEditReviewContent, withReviewWrite, reviewWriteError } from "@/lib/reviews/workflow";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -6,6 +7,8 @@ import { apiSuccess, apiCreated, apiError, ApiErrorCode } from "@/lib/api/respon
 import { generateStructured, checkAIReady } from "@/lib/ai";
 import { buildUserContext } from "@/lib/ai/context/user-context";
 import { z } from "zod";
+import { serializeReviewGoal } from "@/lib/reviews/goals";
+import type { AIProfileAccess } from "@/lib/ai/context/access";
 
 // Goal suggestions based on CliftonStrengths themes
 const STRENGTHS_GOAL_SUGGESTIONS: Record<string, { title: string; description: string; category: string }[]> = {
@@ -111,7 +114,8 @@ async function generateAIGoalSuggestions(
   memberId: string,
   organizationId: string,
   cycleName: string,
-  cycleType: string
+  cycleType: string,
+  access: AIProfileAccess
 ): Promise<Array<{
   title: string;
   description: string;
@@ -125,7 +129,7 @@ async function generateAIGoalSuggestions(
     return null;
   }
 
-  const userContext = await buildUserContext(memberId);
+  const userContext = await buildUserContext(memberId, access);
   if (!userContext || userContext.topStrengths.length === 0) {
     return null;
   }
@@ -174,7 +178,7 @@ Generate 4-5 goals that play to their strengths and help them grow in their role
       isAIGenerated: true,
     }));
   } catch (error) {
-    console.error("[AI Goal Suggestions] Error:", error);
+    console.error("[AI Goal Suggestions] Error:");
     return null;
   }
 }
@@ -258,7 +262,8 @@ export async function GET(
         review.memberId,
         organizationId,
         review.cycle.name,
-        review.cycle.cycleType
+        review.cycle.cycleType,
+        { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }
       );
     }
 
@@ -283,27 +288,15 @@ export async function GET(
     }
 
     return apiSuccess({
-      goals: review.goals.map((g) => ({
-        id: g.id,
-        title: g.title,
-        description: g.description,
-        category: g.category,
-        alignedThemes: g.alignedThemes,
-        suggestedByAI: g.suggestedByAI,
-        status: g.status,
-        progress: g.progress,
-        selfRating: g.selfRating,
-        managerRating: g.managerRating,
-        comments: g.comments,
-        dueDate: g.dueDate?.toISOString() || null,
-        createdAt: g.createdAt.toISOString(),
-      })),
+      goals: review.goals.map((g) => serializeReviewGoal(g,
+        review.reviewerId === memberId || session.user.role === "ADMIN" || session.user.role === "OWNER"
+      )),
       suggestions: aiSuggestions || staticSuggestions.slice(0, 10),
       aiSuggestionsAvailable: aiSuggestions !== null,
       topStrengths: topThemes,
     });
   } catch (error) {
-    console.error("[Get Review Goals Error]", error);
+    console.error("[Get Review Goals Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch goals");
   }
 }
@@ -342,11 +335,14 @@ export async function POST(
           { reviewerId: memberId },
         ],
       },
+      include: { cycle: { select: { includeSelfAssessment: true, includeManagerReview: true } } },
     });
 
     if (!review) {
       return apiError(ApiErrorCode.NOT_FOUND, "Review not found or cycle not active");
     }
+
+    if (!canEditReviewContent(review, memberId)) return apiError(ApiErrorCode.FORBIDDEN, "Review content is not editable in this phase");
 
     const body = await request.json();
     const { title, description, category, alignedThemes, dueDate, suggestedByAI } = body;
@@ -360,7 +356,7 @@ export async function POST(
       return apiError(ApiErrorCode.BAD_REQUEST, `Invalid category. Must be one of: ${validCategories.join(", ")}`);
     }
 
-    const goal = await prisma.reviewGoal.create({
+    const goal = await withReviewWrite(review, organizationId, tx => tx.reviewGoal.create({
       data: {
         reviewId,
         title,
@@ -370,7 +366,7 @@ export async function POST(
         suggestedByAI: suggestedByAI || false,
         dueDate: dueDate ? new Date(dueDate) : null,
       },
-    });
+    }));
 
     return apiCreated({
       id: goal.id,
@@ -385,7 +381,9 @@ export async function POST(
       createdAt: goal.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("[Create Review Goal Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Create Review Goal Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create goal");
   }
 }
@@ -428,6 +426,7 @@ export async function PATCH(
           { reviewerId: memberId },
         ],
       },
+      include: { cycle: { select: { includeSelfAssessment: true, includeManagerReview: true } } },
     });
 
     if (!review) {
@@ -447,6 +446,8 @@ export async function PATCH(
 
     const isSubject = review.memberId === memberId;
     const isReviewer = review.reviewerId === memberId;
+
+    if (!canEditReviewContent(review, memberId)) return apiError(ApiErrorCode.FORBIDDEN, "Review content is not editable in this phase");
 
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
@@ -481,24 +482,18 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.reviewGoal.update({
+    const updated = await withReviewWrite(review, organizationId, tx => tx.reviewGoal.update({
       where: { id: goalId },
       data: updateData,
-    });
+    }));
 
-    return apiSuccess({
-      id: updated.id,
-      title: updated.title,
-      description: updated.description,
-      category: updated.category,
-      status: updated.status,
-      progress: updated.progress,
-      selfRating: updated.selfRating,
-      managerRating: updated.managerRating,
-      comments: updated.comments,
-    });
+    return apiSuccess(serializeReviewGoal(updated,
+      isReviewer || session.user.role === "ADMIN" || session.user.role === "OWNER"
+    ));
   } catch (error) {
-    console.error("[Update Review Goal Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Update Review Goal Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update goal");
   }
 }
@@ -541,22 +536,27 @@ export async function DELETE(
           { reviewerId: memberId },
         ],
       },
+      include: { cycle: { select: { includeSelfAssessment: true, includeManagerReview: true } } },
     });
 
     if (!review) {
       return apiError(ApiErrorCode.NOT_FOUND, "Review not found");
     }
 
-    await prisma.reviewGoal.deleteMany({
+    if (!canEditReviewContent(review, memberId)) return apiError(ApiErrorCode.FORBIDDEN, "Review content is not editable in this phase");
+
+    await withReviewWrite(review, organizationId, tx => tx.reviewGoal.deleteMany({
       where: {
         id: goalId,
         reviewId,
       },
-    });
+    }));
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("[Delete Review Goal Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Delete Review Goal Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete goal");
   }
 }

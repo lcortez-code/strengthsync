@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
@@ -257,7 +257,7 @@ export default function ProfileSettingsPage() {
       setNewPassword("");
       setConfirmPassword("");
       setPasswordSuccess(true);
-      setTimeout(() => setPasswordSuccess(false), 5000);
+      await signOut({ callbackUrl: "/auth/login?passwordChanged=1" });
     } catch (err) {
       console.error("Password change error:", err);
       setPasswordError("An unexpected error occurred");
@@ -320,6 +320,10 @@ export default function ProfileSettingsPage() {
       </div>
 
       {/* Navigation Tabs */}
+      <Card>
+        <CardHeader><CardTitle>Teams account</CardTitle><CardDescription>Connect your personal Teams chat to a StrengthSync organization or disconnect an existing link.</CardDescription></CardHeader>
+        <CardContent><Button variant="outline" asChild><Link href="/auth/teams-link">Manage Teams account</Link></Button></CardContent>
+      </Card>
       <div className="flex gap-2 border-b overflow-x-auto">
         <Link
           href="/settings/profile"

@@ -90,7 +90,9 @@ model User {
   linkedInUrl          String?
   pronouns             String?
   emailVerified        Boolean   @default(false)
+  emailVerificationRequired Boolean @default(true)
   emailVerifyToken     String?
+  emailVerifyExpires   DateTime?
   passwordResetToken   String?
   passwordResetExpires DateTime?
   preferences          Json      @default("{}")
@@ -105,6 +107,15 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model AuthRateLimit {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("auth_rate_limits")
 }
 
 model OrganizationMember {
@@ -598,6 +609,10 @@ enum NotificationType {
 model EmailDigestLog {
   id     String @id @default(cuid())
   userId String
+  organizationId String?
+  memberId String?
+  // Null only on historical entries; each new scheduled delivery claims a unique key.
+  deliveryKey String? @unique
 
   digestType  DigestType
   periodStart DateTime   // Start of the period covered
@@ -628,6 +643,7 @@ enum DigestType {
 }
 
 enum EmailStatus {
+  SKIPPED
   PENDING
   SENT
   FAILED
@@ -833,6 +849,9 @@ model TeamsUserMapping {
   id             String @id @default(cuid())
   teamsUserId    String @unique
   teamsChannelId String?
+  teamsTenantId  String?
+  teamsDisplayName String?
+  verifiedAt     DateTime?
   userId         String
   user           User   @relation(fields: [userId], references: [id])
   organizationId String
@@ -841,6 +860,22 @@ model TeamsUserMapping {
   updatedAt DateTime @updatedAt
 
   @@map("teams_user_mappings")
+}
+
+model TeamsLinkChallenge {
+  id             String @id @default(cuid())
+  tokenHash      String @unique
+  teamsTenantId  String
+  teamsUserId    String
+  conversationId String
+  displayName    String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@unique([teamsTenantId, teamsUserId])
+  @@index([expiresAt])
+  @@map("teams_link_challenges")
 }
 
 // ============================================================================
@@ -983,6 +1018,7 @@ model PartnershipReasoning {
   member2Id String
 
   // Cached AI reasoning
+  inputFingerprint String?
   reasoning String @db.Text
 
   // Context used to generate (for invalidation)
@@ -1010,6 +1046,8 @@ model AIUsageLog {
   promptTokens     Int
   completionTokens Int
   totalTokens      Int
+  reservedTokens   Int       @default(0)
+  settledAt        DateTime?
 
   // Cost calculation (in cents for precision)
   costCents Int @default(0)

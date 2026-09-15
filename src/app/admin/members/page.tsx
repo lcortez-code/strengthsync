@@ -148,6 +148,7 @@ export default function AdminMembersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [memberActionMessage, setMemberActionMessage] = useState<string | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<{ open: boolean; memberId: string; memberName: string }>({
     open: false,
     memberId: "",
@@ -167,11 +168,11 @@ export default function AdminMembersPage() {
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [addMemberSuccess, setAddMemberSuccess] = useState<{
     isNewUser: boolean;
-    tempPassword?: string;
+    invitationSent?: boolean;
+    message?: string;
     email: string;
     name: string;
   } | null>(null);
-  const [copiedPassword, setCopiedPassword] = useState(false);
 
   // Reset password state
   const [resetPasswordDialog, setResetPasswordDialog] = useState<{
@@ -189,11 +190,10 @@ export default function AdminMembersPage() {
   });
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [resetPasswordResult, setResetPasswordResult] = useState<{
-    tempPassword: string;
     email: string;
     name: string;
   } | null>(null);
-  const [copiedResetPassword, setCopiedResetPassword] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
 
   const isOwner = session?.user?.role === "OWNER";
   const isAdmin = session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
@@ -233,6 +233,7 @@ export default function AdminMembersPage() {
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
     setProcessing(true);
+    setMemberActionMessage(null);
     try {
       const res = await fetch(`/api/admin/members/${memberId}`, {
         method: "PATCH",
@@ -242,6 +243,9 @@ export default function AdminMembersPage() {
 
       if (res.ok) {
         fetchMembers();
+      } else {
+        const result = await res.json();
+        setMemberActionMessage(result.error?.message || "Unable to update membership");
       }
     } catch (err) {
       console.error("Failed to update role:", err);
@@ -252,6 +256,7 @@ export default function AdminMembersPage() {
 
   const handleStatusChange = async (memberId: string, newStatus: string) => {
     setProcessing(true);
+    setMemberActionMessage(null);
     try {
       const res = await fetch(`/api/admin/members/${memberId}`, {
         method: "PATCH",
@@ -261,6 +266,9 @@ export default function AdminMembersPage() {
 
       if (res.ok) {
         fetchMembers();
+      } else {
+        const result = await res.json();
+        setMemberActionMessage(result.error?.message || "Unable to update membership");
       }
     } catch (err) {
       console.error("Failed to update status:", err);
@@ -275,6 +283,7 @@ export default function AdminMembersPage() {
 
   const confirmRemoveMember = async () => {
     setProcessing(true);
+    setMemberActionMessage(null);
     try {
       const res = await fetch(`/api/admin/members/${removeConfirm.memberId}`, {
         method: "DELETE",
@@ -282,6 +291,9 @@ export default function AdminMembersPage() {
 
       if (res.ok) {
         fetchMembers();
+      } else {
+        const result = await res.json();
+        setMemberActionMessage(result.error?.message || "Unable to update membership");
       }
     } catch (err) {
       console.error("Failed to remove member:", err);
@@ -317,10 +329,10 @@ export default function AdminMembersPage() {
         return;
       }
 
-      // Show success with credentials if new user
       setAddMemberSuccess({
         isNewUser: result.data.isNewUser,
-        tempPassword: result.data.tempPassword,
+        invitationSent: result.data.invitationSent,
+        message: result.data.message,
         email: result.data.email,
         name: result.data.name,
       });
@@ -344,20 +356,11 @@ export default function AdminMembersPage() {
     });
     setAddMemberError(null);
     setAddMemberSuccess(null);
-    setCopiedPassword(false);
-  };
-
-  const copyTempPassword = () => {
-    if (addMemberSuccess?.tempPassword) {
-      navigator.clipboard.writeText(addMemberSuccess.tempPassword);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
-    }
   };
 
   const handleResetPassword = (member: Member) => {
     setResetPasswordResult(null);
-    setCopiedResetPassword(false);
+    setResetPasswordError(null);
     setResetPasswordDialog({
       open: true,
       memberId: member.id,
@@ -377,34 +380,36 @@ export default function AdminMembersPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        console.error("Failed to reset password:", result.error?.message);
+        setResetPasswordError(result.error?.message || "Unable to send password reset link");
         return;
       }
 
       setResetPasswordResult({
-        tempPassword: result.data.tempPassword,
         email: result.data.email,
         name: result.data.name,
       });
     } catch (err) {
-      console.error("Failed to reset password:", err);
+      setResetPasswordError("Unable to send password reset link. Please try again.");
     } finally {
       setResetPasswordLoading(false);
     }
   };
 
-  const copyResetPassword = () => {
-    if (resetPasswordResult?.tempPassword) {
-      navigator.clipboard.writeText(resetPasswordResult.tempPassword);
-      setCopiedResetPassword(true);
-      setTimeout(() => setCopiedResetPassword(false), 2000);
-    }
+  const resendInvitation = async (memberId: string) => {
+    setProcessing(true);
+    setMemberActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/members/${memberId}?action=resend-invitation`, { method: "POST" });
+      const result = await res.json();
+      setMemberActionMessage(res.ok ? "Invitation email sent. The recipient must accept before joining." : result.error?.message || "Unable to resend invitation");
+    } catch { setMemberActionMessage("Unable to resend invitation. Please try again."); }
+    finally { setProcessing(false); }
   };
 
   const closeResetPasswordDialog = () => {
     setResetPasswordDialog((prev) => ({ ...prev, open: false }));
     setResetPasswordResult(null);
-    setCopiedResetPassword(false);
+    setResetPasswordError(null);
   };
 
   if (!isAdmin) {
@@ -419,6 +424,8 @@ export default function AdminMembersPage() {
           { label: "Members" },
         ]}
       />
+
+      {memberActionMessage && <p role="status" className="p-3 rounded-lg bg-muted text-sm">{memberActionMessage}</p>}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -578,7 +585,7 @@ export default function AdminMembersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
                               {/* Role options - only owners can change roles */}
-                              {isOwner && member.role === "MEMBER" && (
+                              {isOwner && member.status !== "PENDING" && member.role === "MEMBER" && (
                                 <>
                                   <DropdownMenuItem
                                     onClick={() => handleRoleChange(member.id, "MANAGER")}
@@ -596,7 +603,7 @@ export default function AdminMembersPage() {
                                   </DropdownMenuItem>
                                 </>
                               )}
-                              {isOwner && member.role === "MANAGER" && (
+                              {isOwner && member.status !== "PENDING" && member.role === "MANAGER" && (
                                 <>
                                   <DropdownMenuItem
                                     onClick={() => handleRoleChange(member.id, "ADMIN")}
@@ -614,7 +621,7 @@ export default function AdminMembersPage() {
                                   </DropdownMenuItem>
                                 </>
                               )}
-                              {isOwner && member.role === "ADMIN" && (
+                              {isOwner && member.status !== "PENDING" && member.role === "ADMIN" && (
                                 <>
                                   <DropdownMenuItem
                                     onClick={() => handleRoleChange(member.id, "MANAGER")}
@@ -634,7 +641,7 @@ export default function AdminMembersPage() {
                               )}
 
                               {/* Status options */}
-                              {member.status === "ACTIVE" && (
+                              {member.status === "ACTIVE" && (isOwner || member.role === "MEMBER") && (
                                 <DropdownMenuItem
                                   onClick={() => handleStatusChange(member.id, "INACTIVE")}
                                   disabled={processing}
@@ -643,7 +650,7 @@ export default function AdminMembersPage() {
                                   Deactivate
                                 </DropdownMenuItem>
                               )}
-                              {(member.status === "INACTIVE" || member.status === "PENDING") && (
+                              {member.status === "INACTIVE" && (isOwner || member.role === "MEMBER") && (
                                 <DropdownMenuItem
                                   onClick={() => handleStatusChange(member.id, "ACTIVE")}
                                   disabled={processing}
@@ -656,7 +663,7 @@ export default function AdminMembersPage() {
                               <DropdownMenuSeparator />
 
                               {/* Reset Password - only if user can manage this member */}
-                              {(isOwner || (member.role !== "OWNER" && member.role !== "ADMIN")) && (
+                              {member.status === "ACTIVE" && (isOwner || member.role === "MEMBER") && (
                                 <DropdownMenuItem
                                   onClick={() => handleResetPassword(member)}
                                   disabled={processing}
@@ -666,15 +673,20 @@ export default function AdminMembersPage() {
                                 </DropdownMenuItem>
                               )}
 
+                              {member.status === "PENDING" && (isOwner || member.role === "MEMBER") && (
+                                <DropdownMenuItem onClick={() => resendInvitation(member.id)} disabled={processing}>
+                                  <RefreshCw className="h-4 w-4 mr-2" />Resend invitation
+                                </DropdownMenuItem>
+                              )}
                               {/* Remove */}
-                              <DropdownMenuItem
+                              {(isOwner || member.role === "MEMBER") && <DropdownMenuItem
                                 onClick={() => handleRemoveMember(member.id, member.name)}
                                 disabled={processing}
                                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
                               >
                                 <UserMinus className="h-4 w-4 mr-2" />
-                                Remove from org
-                              </DropdownMenuItem>
+                                {member.status === "PENDING" ? "Cancel invitation" : "Remove from org"}
+                              </DropdownMenuItem>}
                             </DropdownMenuContent>
                           </DropdownMenu>
                           )}
@@ -719,7 +731,7 @@ export default function AdminMembersPage() {
           <DialogHeader>
             <DialogTitle>Add Team Member</DialogTitle>
             <DialogDescription>
-              Add a new member to your organization. They&apos;ll receive login credentials.
+              Recipients receive an email and choose whether to join. New account holders verify their email and choose their own password.
             </DialogDescription>
           </DialogHeader>
 
@@ -728,47 +740,14 @@ export default function AdminMembersPage() {
               <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                 <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium mb-2">
                   <CheckCircle2 className="h-5 w-5" />
-                  Member Added Successfully
+                  {"Invitation Pending"}
                 </div>
                 <p className="text-sm text-green-600 dark:text-green-500">
-                  {addMemberSuccess.name} ({addMemberSuccess.email}) has been added to your organization.
+                  {addMemberSuccess.message}
                 </p>
               </div>
 
-              {addMemberSuccess.isNewUser && addMemberSuccess.tempPassword && (
-                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
-                    Temporary Password (share this securely)
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded border font-mono text-sm">
-                      {addMemberSuccess.tempPassword}
-                    </code>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={copyTempPassword}
-                      aria-label="Copy temporary password"
-                    >
-                      {copiedPassword ? (
-                        <Check className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                    The user should change this password after their first login.
-                  </p>
-                </div>
-              )}
-
-              {!addMemberSuccess.isNewUser && (
-                <p className="text-sm text-muted-foreground">
-                  This user already had an account and has been added to your organization with their existing credentials.
-                </p>
-              )}
+              <p className="text-sm text-muted-foreground">The recipient must accept the emailed invitation before joining. New account holders verify their email and choose their own password.</p>
 
               <DialogFooter>
                 <Button onClick={() => { resetAddMemberModal(); setAddMemberOpen(false); }}>
@@ -919,98 +898,25 @@ export default function AdminMembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reset Password Dialog */}
       <Dialog open={resetPasswordDialog.open} onOpenChange={(open) => { if (!open) closeResetPasswordDialog(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
+            <DialogTitle>Send password reset link</DialogTitle>
             <DialogDescription>
-              {resetPasswordResult
-                ? "Password has been reset successfully."
-                : `Reset password for ${resetPasswordDialog.memberName}?`}
+              {resetPasswordResult ? "Reset link sent" : `Help ${resetPasswordDialog.memberName} reset their password.`}
             </DialogDescription>
           </DialogHeader>
-
-          {resetPasswordResult ? (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium mb-2">
-                  <CheckCircle2 className="h-5 w-5" />
-                  Password Reset Successfully
-                </div>
-                <p className="text-sm text-green-600 dark:text-green-500">
-                  A new temporary password has been generated for {resetPasswordResult.name}.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
-                  New Temporary Password (share this securely)
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded border font-mono text-sm">
-                    {resetPasswordResult.tempPassword}
-                  </code>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={copyResetPassword}
-                    aria-label="Copy reset password"
-                  >
-                    {copiedResetPassword ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  The user should change this password after logging in.
-                </p>
-              </div>
-
-              <DialogFooter>
-                <Button onClick={closeResetPasswordDialog}>
-                  Done
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                This will generate a new temporary password for <strong>{resetPasswordDialog.memberName}</strong> ({resetPasswordDialog.memberEmail}).
-                They will need to use this new password to log in.
-              </p>
-
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeResetPasswordDialog}
-                  disabled={resetPasswordLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={confirmResetPassword}
-                  disabled={resetPasswordLoading}
-                >
-                  {resetPasswordLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Resetting...
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="h-4 w-4 mr-2" />
-                      Reset Password
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
+          <div className="space-y-4">
+            {resetPasswordError && <p role="alert" className="text-sm text-destructive">{resetPasswordError}</p>}
+            <p className="text-sm text-muted-foreground">
+              {resetPasswordResult ? `A single-use reset link was emailed to ${resetPasswordResult.email}.` : `A single-use reset link will be sent only to ${resetPasswordDialog.memberEmail}.`}
+              {" "}Their password stays the same until they use the link. The link expires in one hour.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={closeResetPasswordDialog} disabled={resetPasswordLoading}>{resetPasswordResult ? "Done" : "Cancel"}</Button>
+              {!resetPasswordResult && <Button onClick={confirmResetPassword} disabled={resetPasswordLoading}>{resetPasswordLoading ? "Sending…" : "Send reset link"}</Button>}
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -426,7 +426,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ reviewI
   const canEditManagerReview =
     (review.isReviewer || review.isAdmin) &&
     review.cycle.includeManagerReview &&
-    review.status === "MANAGER_REVIEW";
+    (review.status === "MANAGER_REVIEW" || (review.status === "NOT_STARTED" && !review.cycle.includeSelfAssessment));
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

@@ -166,7 +166,7 @@ export async function deleteAvatar(avatarUrl: string): Promise<void> {
 
     await s3Client.send(command);
   } catch (error) {
-    console.error("Failed to delete avatar from S3:", error);
+    console.error("Failed to delete avatar from S3:");
     // Don't throw - file deletion failure shouldn't break the flow
   }
 }

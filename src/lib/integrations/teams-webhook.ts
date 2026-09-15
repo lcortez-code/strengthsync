@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isTeamsWebhookUrl, getTeamsFallbackUrl } from "@/lib/integrations/teams-url";
 
 /**
  * Microsoft Teams Incoming Webhook Integration
@@ -64,15 +65,16 @@ async function resolveWebhookUrl(organizationId: string): Promise<string | null>
     const settings = org?.settings as Record<string, unknown> | null;
     const orgUrl = settings?.teamsWebhookUrl as string | undefined;
 
-    if (orgUrl && orgUrl.startsWith("https://")) {
+    if (isTeamsWebhookUrl(orgUrl)) {
       return orgUrl;
     }
   } catch (err) {
-    console.error("[Teams Webhook] Error reading org settings:", err);
+    console.error("[Teams Webhook] Unable to read organization settings");
+    return null;
   }
 
   // Fallback to environment variable
-  return process.env.TEAMS_WEBHOOK_URL || null;
+  return getTeamsFallbackUrl(organizationId);
 }
 
 /**
@@ -80,6 +82,7 @@ async function resolveWebhookUrl(organizationId: string): Promise<string | null>
  * Fire-and-forget: never throws, errors are logged.
  */
 async function sendCard(webhookUrl: string, card: AdaptiveCard): Promise<boolean> {
+  if (!isTeamsWebhookUrl(webhookUrl)) return false;
   const message: TeamsMessage = {
     type: "message",
     attachments: [
@@ -95,17 +98,18 @@ async function sendCard(webhookUrl: string, card: AdaptiveCard): Promise<boolean
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(message),
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      console.error(`[Teams Webhook] HTTP ${res.status}: ${text}`);
+      console.error(`[Teams Webhook] HTTP ${res.status}`);
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error("[Teams Webhook] Send failed:", err);
+    console.error("[Teams Webhook] Send failed");
     return false;
   }
 }

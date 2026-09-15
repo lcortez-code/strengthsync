@@ -1,3 +1,4 @@
+import { canEditReviewContent, withReviewWrite, reviewWriteError } from "@/lib/reviews/workflow";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -55,6 +56,8 @@ export async function GET(
     // Get shoutouts received during this period
     const shoutoutsReceived = await prisma.shoutout.findMany({
       where: {
+        organizationId,
+        OR: [{ isPublic: true }, { giverId: memberId }, { receiverId: memberId }],
         receiverId: review.memberId,
         createdAt: {
           gte: cycleStart,
@@ -75,6 +78,8 @@ export async function GET(
     // Get shoutouts given during this period
     const shoutoutsGiven = await prisma.shoutout.findMany({
       where: {
+        organizationId,
+        OR: [{ isPublic: true }, { giverId: memberId }, { receiverId: memberId }],
         giverId: review.memberId,
         createdAt: {
           gte: cycleStart,
@@ -245,7 +250,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("[Get Review Evidence Error]", error);
+    console.error("[Get Review Evidence Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch evidence");
   }
 }
@@ -284,11 +289,14 @@ export async function POST(
           { reviewerId: memberId },
         ],
       },
+      include: { cycle: { select: { includeSelfAssessment: true, includeManagerReview: true } } },
     });
 
     if (!review) {
       return apiError(ApiErrorCode.NOT_FOUND, "Review not found or cycle not active");
     }
+
+    if (!canEditReviewContent(review, memberId)) return apiError(ApiErrorCode.FORBIDDEN, "Review content is not editable in this phase");
 
     const body = await request.json();
     const {
@@ -320,7 +328,7 @@ export async function POST(
       return apiError(ApiErrorCode.BAD_REQUEST, `Invalid evidence type. Must be one of: ${validTypes.join(", ")}`);
     }
 
-    const evidence = await prisma.reviewEvidence.create({
+    const evidence = await withReviewWrite(review, organizationId, tx => tx.reviewEvidence.create({
       data: {
         reviewId,
         evidenceType,
@@ -333,7 +341,7 @@ export async function POST(
         mentorshipId: mentorshipId || null,
         addedBy: memberId,
       },
-    });
+    }));
 
     return apiCreated({
       id: evidence.id,
@@ -345,7 +353,9 @@ export async function POST(
       createdAt: evidence.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("[Create Review Evidence Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Create Review Evidence Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to add evidence");
   }
 }
@@ -388,22 +398,27 @@ export async function DELETE(
           { reviewerId: memberId },
         ],
       },
+      include: { cycle: { select: { includeSelfAssessment: true, includeManagerReview: true } } },
     });
 
     if (!review) {
       return apiError(ApiErrorCode.NOT_FOUND, "Review not found");
     }
 
-    await prisma.reviewEvidence.deleteMany({
+    if (!canEditReviewContent(review, memberId)) return apiError(ApiErrorCode.FORBIDDEN, "Review content is not editable in this phase");
+
+    await withReviewWrite(review, organizationId, tx => tx.reviewEvidence.deleteMany({
       where: {
         id: evidenceId,
         reviewId,
       },
-    });
+    }));
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("[Delete Review Evidence Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Delete Review Evidence Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete evidence");
   }
 }

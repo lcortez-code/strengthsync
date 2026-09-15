@@ -37,7 +37,7 @@ export async function PATCH(
       readAt: updated.readAt?.toISOString(),
     });
   } catch (error) {
-    console.error("Error updating notification:", error);
+    console.error("Error updating notification:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update notification");
   }
 }
@@ -68,7 +68,7 @@ export async function DELETE(
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("Error deleting notification:", error);
+    console.error("Error deleting notification:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete notification");
   }
 }

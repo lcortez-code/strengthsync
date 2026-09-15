@@ -1,10 +1,22 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { streamText, CoreMessage } from "ai";
-import { openai, checkAIReady, getFeatureSettings, checkAllLimits, logUsage } from "@/lib/ai";
+import { streamText } from "ai";
+import { z } from "zod";
+import { openai, checkAIReady, getFeatureSettings, reserveAIRequest, estimateTokenAllowance, logUsage } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { buildUserContext, buildTeamContext, formatTeamContextForPrompt, formatUserContextForPrompt } from "@/lib/ai/context";
+
+const chatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1).max(10000),
+  }).strict()).min(1).max(100).refine(
+    (messages) => messages.reduce((total, message) => total + message.content.length, 0) <= 100000,
+    "Conversation is too long"
+  ),
+  conversationId: z.string().min(1).max(191).optional(),
+}).strict();
 
 const SYSTEM_PROMPT = `You are the StrengthSync AI Coach — a personal strengths-based development coach inside a CliftonStrengths team collaboration app.
 
@@ -34,6 +46,7 @@ Available CliftonStrengths Domains:
 - Strategic Thinking: Analytical themes (Analytical, Context, Futuristic, Ideation, Input, Intellection, Learner, Strategic)`;
 
 export async function POST(request: NextRequest) {
+  let recordStreamFailure: ((reason: string) => Promise<void>) | undefined;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -61,32 +74,38 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check rate limits
-    const rateLimitResult = await checkAllLimits(memberId, organizationId);
-    if (!rateLimitResult.allowed) {
-      return new Response(JSON.stringify({ error: rateLimitResult.reason }), {
-        status: 429,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const body = await request.json();
-    const { messages, conversationId } = body as {
-      messages: CoreMessage[];
-      conversationId?: string;
-    };
-
-    if (!messages || !Array.isArray(messages)) {
-      return new Response(JSON.stringify({ error: "Messages array required" }), {
+    const validation = chatRequestSchema.safeParse(await request.json());
+    if (!validation.success) {
+      return new Response(JSON.stringify({ error: "Provide up to 100 user or assistant text messages of at most 10,000 characters each" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
+    const { messages, conversationId } = validation.data;
+    const conversationScope = {
+      id: conversationId,
+      memberId,
+      organizationId,
+      status: "ACTIVE" as const,
+      member: { organizationId, status: "ACTIVE" as const },
+    };
+    if (conversationId) {
+      const conversation = await prisma.aIConversation.findFirst({
+        where: conversationScope,
+        select: { id: true },
+      });
+      if (!conversation) {
+        return new Response(JSON.stringify({ error: "Conversation not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Get user and team context for personalization
     const [userContext, teamContext] = await Promise.all([
-      buildUserContext(memberId),
-      buildTeamContext(organizationId),
+      buildUserContext(memberId, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }),
+      buildTeamContext(organizationId, { viewerMemberId: memberId, viewerRole: session.user.role }),
     ]);
 
     // Build context-aware system prompt
@@ -130,19 +149,62 @@ export async function POST(request: NextRequest) {
 
     const settings = getFeatureSettings("chat");
     const startTime = Date.now();
+    const admission = await reserveAIRequest({
+      memberId,
+      organizationId,
+      feature: "chat",
+      endpoint: "/api/ai/chat",
+      model: settings.model,
+      reservedTokens: estimateTokenAllowance({ system: contextPrompt, messages }, settings.maxTokens),
+    });
+    if (!admission.allowed || !admission.reservationId) {
+      return new Response(JSON.stringify({ error: admission.reason || "AI capacity unavailable" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const reservationId = admission.reservationId;
+    let usageFinalized = false;
+    recordStreamFailure = async (reason) => {
+      if (usageFinalized) return;
+      usageFinalized = true;
+      await logUsage({
+        reservationId,
+        memberId,
+        organizationId,
+        feature: "chat",
+        endpoint: "/api/ai/chat",
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, model: settings.model, latencyMs: Date.now() - startTime },
+        usageKnown: false,
+        success: false,
+        errorMessage: reason,
+      });
+    };
 
     // Stream the response
     const result = streamText({
       model: openai(settings.model),
       system: contextPrompt,
       messages,
+      allowSystemInMessages: false,
+      abortSignal: request.signal,
+      experimental_download: async (assets) => {
+        if (assets.length > 0) throw new Error("Chat attachments are not supported");
+        return [];
+      },
       temperature: settings.temperature,
       maxOutputTokens: settings.maxTokens,
+      maxRetries: 0,
+      onError: async () => recordStreamFailure?.("Chat generation failed"),
+      onAbort: async () => recordStreamFailure?.("Chat generation cancelled"),
       onFinish: async ({ usage, text }) => {
+        if (usageFinalized) return;
+        usageFinalized = true;
         const latencyMs = Date.now() - startTime;
 
         // Log usage
         await logUsage({
+          reservationId,
           memberId,
           organizationId,
           feature: "chat",
@@ -154,35 +216,35 @@ export async function POST(request: NextRequest) {
             model: settings.model,
             latencyMs,
           },
-          responseSummary: text.substring(0, 200),
+          usageKnown: usage.inputTokens != null && usage.outputTokens != null,
           success: true,
         });
 
         // Save to conversation if ID provided
         if (conversationId) {
           const lastUserMessage = messages.filter((m) => m.role === "user").pop();
-
-          if (lastUserMessage && typeof lastUserMessage.content === "string") {
-            await prisma.aIMessage.create({
-              data: {
-                conversationId,
-                role: "USER",
-                content: lastUserMessage.content,
-              },
+          await prisma.$transaction(async (tx) => {
+            // Lock and reauthorize the conversation before persisting streamed content.
+            const writable = await tx.aIConversation.updateMany({
+              where: conversationScope,
+              data: { updatedAt: new Date() },
             });
-          }
-
-          await prisma.aIMessage.create({
-            data: {
-              conversationId,
-              role: "ASSISTANT",
-              content: text,
-              promptTokens: usage.inputTokens ?? 0,
-              completionTokens: usage.outputTokens ?? 0,
-              totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
-              model: settings.model,
-              latencyMs,
-            },
+            if (writable.count !== 1) return;
+            await tx.aIMessage.createMany({
+              data: [
+                ...(lastUserMessage ? [{ conversationId, role: "USER" as const, content: lastUserMessage.content }] : []),
+                {
+                  conversationId,
+                  role: "ASSISTANT",
+                  content: text,
+                  promptTokens: usage.inputTokens ?? 0,
+                  completionTokens: usage.outputTokens ?? 0,
+                  totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+                  model: settings.model,
+                  latencyMs,
+                },
+              ],
+            });
           });
         }
       },
@@ -191,7 +253,8 @@ export async function POST(request: NextRequest) {
     // Return the streaming response
     return result.toTextStreamResponse();
   } catch (error) {
-    console.error("[AI Chat Error]", error);
+    await recordStreamFailure?.("Chat generation failed").catch(() => {});
+    console.error("[AI Chat] Request failed");
     return new Response(JSON.stringify({ error: "Failed to process chat" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
@@ -260,7 +323,7 @@ export async function GET(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("[AI Chat GET Error]", error);
+    console.error("[AI Chat] History request failed");
     return new Response(JSON.stringify({ error: "Failed to fetch conversations" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

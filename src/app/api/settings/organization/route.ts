@@ -1,3 +1,4 @@
+import { generateInviteCode } from "@/lib/auth/invite-code";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -35,7 +36,6 @@ export async function GET(request: NextRequest) {
         description: true,
         inviteCode: true,
         inviteCodeEnabled: true,
-        settings: true,
         createdAt: true,
         _count: {
           select: { members: true },
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       canEdit: isAdmin,
     });
   } catch (error) {
-    console.error("Error fetching organization:", error);
+    console.error("Error fetching organization:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch organization");
   }
 }
@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess(updated);
   } catch (error) {
-    console.error("Error updating organization:", error);
+    console.error("Error updating organization:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update organization");
   }
 }
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate new invite code
-    const newInviteCode = `${organizationId.slice(0, 4)}-${Math.random().toString(36).substring(2, 8)}`.toUpperCase();
+    const newInviteCode = generateInviteCode();
 
     const updated = await prisma.organization.update({
       where: { id: organizationId },
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
 
     return apiSuccess({ inviteCode: updated.inviteCode });
   } catch (error) {
-    console.error("Error regenerating invite code:", error);
+    console.error("Error regenerating invite code:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to regenerate invite code");
   }
 }

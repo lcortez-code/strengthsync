@@ -212,8 +212,8 @@ export async function executeSuggestPartners(
 ) {
   const { memberId, limit = 3 } = params;
 
-  const targetMember = await prisma.organizationMember.findUnique({
-    where: { id: memberId },
+  const targetMember = await prisma.organizationMember.findFirst({
+    where: { id: memberId, organizationId, status: "ACTIVE" },
     include: {
       user: { select: { fullName: true } },
       strengths: {

@@ -7,6 +7,8 @@ import type {
   TurnContext,
 } from "botbuilder";
 import { handleTeamsBotCommand } from "@/lib/integrations/teams-bot-handlers";
+import { identifyTeamsActivity, isTeamsBotConfigured } from "@/lib/integrations/teams-identity";
+import { readTeamsJson, TeamsRequestError } from "@/lib/integrations/teams-request";
 
 /**
  * POST /api/integrations/teams-bot
@@ -54,7 +56,7 @@ function getAdapterAndBot() {
   const adapter = new CloudAdapter(botFrameworkAuth);
 
   adapter.onTurnError = async (context: TurnContext, error: Error) => {
-    console.error(`[Teams Bot] Unhandled error: ${error.message}`, error);
+    console.error("[Teams Bot] Command failed");
     await context.sendActivity(
       "Sorry, something went wrong processing your message. Please try again."
     );
@@ -65,15 +67,17 @@ function getAdapterAndBot() {
       super();
 
       this.onMessage(async (context: TurnContext, next: () => Promise<void>) => {
-        const messageText = context.activity.text || "";
-        const teamsUserId = context.activity.from?.aadObjectId || context.activity.from?.id || "";
-
-        if (!teamsUserId) {
-          await context.sendActivity("Unable to identify your Teams account.");
+        const identity = identifyTeamsActivity(context.activity);
+        if (!identity) {
+          await context.sendActivity("Use a personal chat with StrengthSync in the configured Teams organization.");
           return next();
         }
-
-        const card = await handleTeamsBotCommand(teamsUserId, messageText);
+        const messageText = context.activity.text || "";
+        if (typeof messageText !== "string" || messageText.length > 2000) {
+          await context.sendActivity("Keep your message under 2,000 characters.");
+          return next();
+        }
+        const card = await handleTeamsBotCommand(identity, messageText);
         const adaptiveCard = CardFactory.adaptiveCard(card);
         await context.sendActivity({ attachments: [adaptiveCard] });
 
@@ -81,6 +85,7 @@ function getAdapterAndBot() {
       });
 
       this.onMembersAdded(async (context: TurnContext, next: () => Promise<void>) => {
+        if (!identifyTeamsActivity(context.activity)) return next();
         for (const member of context.activity.membersAdded || []) {
           if (member.id !== context.activity.recipient.id) {
             const welcomeCard = CardFactory.adaptiveCard({
@@ -127,23 +132,23 @@ function getAdapterAndBot() {
 export async function POST(request: NextRequest) {
   try {
     // Verify that bot credentials are configured
-    if (!process.env.MICROSOFT_APP_ID || !process.env.MICROSOFT_APP_PASSWORD) {
-      console.warn("[Teams Bot] MICROSOFT_APP_ID or MICROSOFT_APP_PASSWORD not configured");
+    if (!isTeamsBotConfigured()) {
       return NextResponse.json(
         { error: "Bot not configured" },
         { status: 503 }
       );
     }
 
-    const { adapter, bot } = getAdapterAndBot();
-
-    const body: Record<string, unknown> = await request.json();
     const authHeader = request.headers.get("authorization") || "";
+    if (!authHeader.trim()) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const body = await readTeamsJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid activity" }, { status: 400 });
+    const { adapter, bot } = getAdapterAndBot();
 
     // Bridge Next.js App Router Request to Bot Framework compatible format.
     // CloudAdapter.process expects a Node-style Request with a body property.
     const shimRequest: BotFrameworkRequestShim = {
-      body,
+      body: body as Record<string, unknown>,
       headers: {
         authorization: authHeader,
         "content-type": "application/json",
@@ -192,7 +197,11 @@ export async function POST(request: NextRequest) {
 
     return new NextResponse(responseBody || null, { status: responseStatus });
   } catch (error) {
-    console.error("[Teams Bot] Route error:", error);
+    if (error instanceof TeamsRequestError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error && typeof error === "object" && "statusCode" in error && error.statusCode === 401) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    console.error("[Teams Bot] Request failed");
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

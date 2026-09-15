@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiCreated, apiError, ApiErrorCode } from "@/lib/api/response";
 import { z } from "zod";
+import { publicFeedWhere } from "@/lib/social/feed";
 
 const reactionSchema = z.object({
   emoji: z.enum(["like", "celebrate", "love", "star", "clap"]),
@@ -29,7 +30,7 @@ export async function POST(
     }
 
     const feedItem = await prisma.feedItem.findFirst({
-      where: { id: feedItemId, organizationId },
+      where: { id: feedItemId, ...publicFeedWhere(organizationId) },
     });
 
     if (!feedItem) {
@@ -82,7 +83,7 @@ export async function POST(
       emoji: reaction.emoji,
     });
   } catch (error) {
-    console.error("Error adding reaction:", error);
+    console.error("Error adding reaction:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to add reaction");
   }
 }
@@ -100,17 +101,17 @@ export async function DELETE(
     }
 
     const memberId = session.user.memberId;
+    const organizationId = session.user.organizationId;
 
-    if (!memberId) {
+    if (!memberId || !organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
-    const reaction = await prisma.reaction.findUnique({
+    const reaction = await prisma.reaction.findFirst({
       where: {
-        feedItemId_memberId: {
-          feedItemId,
-          memberId,
-        },
+        feedItemId,
+        memberId,
+        feedItem: publicFeedWhere(organizationId),
       },
     });
 
@@ -118,11 +119,13 @@ export async function DELETE(
       return apiError(ApiErrorCode.NOT_FOUND, "Reaction not found");
     }
 
-    await prisma.reaction.delete({ where: { id: reaction.id } });
+    await prisma.reaction.deleteMany({
+      where: { id: reaction.id, memberId, feedItem: publicFeedWhere(organizationId) },
+    });
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("Error removing reaction:", error);
+    console.error("Error removing reaction:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to remove reaction");
   }
 }

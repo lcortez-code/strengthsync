@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
+import { withReviewWrite, reviewWriteError } from "@/lib/reviews/workflow";
+import { serializeReviewGoal } from "@/lib/reviews/goals";
 
 /**
  * GET /api/reviews/[reviewId]
@@ -129,9 +131,9 @@ export async function GET(
       return apiError(ApiErrorCode.NOT_FOUND, "Review not found");
     }
 
-    return formatReviewResponse(review, memberId, false);
+    return formatReviewResponse(review, memberId, session.user.role === "ADMIN" || session.user.role === "OWNER");
   } catch (error) {
-    console.error("[Get Review Error]", error);
+    console.error("[Get Review Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch review");
   }
 }
@@ -185,20 +187,7 @@ function formatReviewResponse(review: any, currentMemberId: string, isAdmin: boo
     managerAssessmentAt: review.managerAssessmentAt?.toISOString() || null,
     overallRating: review.overallRating,
     strengthsContext: review.strengthsContext,
-    goals: review.goals.map((g: any) => ({
-      id: g.id,
-      title: g.title,
-      description: g.description,
-      category: g.category,
-      alignedThemes: g.alignedThemes,
-      suggestedByAI: g.suggestedByAI,
-      status: g.status,
-      progress: g.progress,
-      selfRating: g.selfRating,
-      managerRating: isReviewer || isAdmin ? g.managerRating : null,
-      comments: g.comments,
-      dueDate: g.dueDate?.toISOString() || null,
-    })),
+    goals: review.goals.map((g: Parameters<typeof serializeReviewGoal>[0]) => serializeReviewGoal(g, isReviewer || isAdmin)),
     evidence: review.evidence.map((e: any) => ({
       id: e.id,
       evidenceType: e.evidenceType,
@@ -265,6 +254,17 @@ export async function PATCH(
 
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
+    const selfEdit = ["selfAssessment", "strengthsUsed", "submitSelfAssessment"].some(key => body[key] !== undefined);
+    const managerEdit = ["managerAssessment", "overallRating", "completeReview"].some(key => body[key] !== undefined);
+    if (selfEdit && (!isSubject || !review.cycle.includeSelfAssessment || !["NOT_STARTED", "SELF_ASSESSMENT"].includes(review.status)))
+      return apiError(ApiErrorCode.FORBIDDEN, "Self-assessment is no longer editable");
+    if (managerEdit && (!(isReviewer || isAdmin) || !review.cycle.includeManagerReview || (review.status !== "MANAGER_REVIEW" && !(review.status === "NOT_STARTED" && !review.cycle.includeSelfAssessment))))
+      return apiError(ApiErrorCode.FORBIDDEN, "Manager review is not editable in this phase");
+    if (body.acknowledge !== undefined && (!isSubject || review.status !== "COMPLETED" || selfEdit || managerEdit || body.reviewerId !== undefined))
+      return apiError(ApiErrorCode.FORBIDDEN, "Only the subject can acknowledge a completed review");
+    if (body.reviewerId !== undefined && (!isAdmin || ["COMPLETED", "ACKNOWLEDGED"].includes(review.status)))
+      return apiError(ApiErrorCode.FORBIDDEN, "Reviewer assignment is closed");
+
 
     // Self-assessment updates (subject only)
     if (isSubject && review.cycle.includeSelfAssessment) {
@@ -276,13 +276,15 @@ export async function PATCH(
         updateData.strengthsUsed = body.strengthsUsed;
       }
       if (body.submitSelfAssessment) {
-        updateData.status = "MANAGER_REVIEW";
+        updateData.status = review.cycle.includeManagerReview ? "MANAGER_REVIEW" : "COMPLETED";
+        if (!review.cycle.includeManagerReview) updateData.completedAt = new Date();
         updateData.submittedAt = new Date();
       }
     }
 
     // Manager assessment updates (reviewer only)
-    if ((isReviewer || isAdmin) && review.cycle.includeManagerReview) {
+    if ((isReviewer || isAdmin) && review.cycle.includeManagerReview && managerEdit) {
+      if (review.status === "NOT_STARTED") updateData.status = "MANAGER_REVIEW";
       if (body.managerAssessment !== undefined) {
         updateData.managerAssessment = body.managerAssessment;
         updateData.managerAssessmentAt = new Date();
@@ -307,6 +309,16 @@ export async function PATCH(
 
     // Assign reviewer (admin only)
     if (isAdmin && body.reviewerId !== undefined) {
+      if (body.reviewerId) {
+        if (typeof body.reviewerId !== "string") {
+          return apiError(ApiErrorCode.BAD_REQUEST, "Invalid reviewer");
+        }
+        const reviewer = await prisma.organizationMember.findFirst({
+          where: { id: body.reviewerId, organizationId, status: "ACTIVE" },
+          select: { id: true },
+        });
+        if (!reviewer) return apiError(ApiErrorCode.NOT_FOUND, "Reviewer not found in your organization");
+      }
       updateData.reviewerId = body.reviewerId || null;
     }
 
@@ -314,10 +326,9 @@ export async function PATCH(
       return apiError(ApiErrorCode.BAD_REQUEST, "No valid updates provided");
     }
 
-    const updated = await prisma.performanceReview.update({
-      where: { id: reviewId },
-      data: updateData,
-    });
+    const updated = await withReviewWrite(review, organizationId, tx => tx.performanceReview.update({
+      where: { id: reviewId }, data: updateData,
+    }));
 
     return apiSuccess({
       id: updated.id,
@@ -329,7 +340,9 @@ export async function PATCH(
       completedAt: updated.completedAt?.toISOString() || null,
     });
   } catch (error) {
-    console.error("[Update Review Error]", error);
+    const conflict = reviewWriteError(error);
+    if (conflict) return conflict;
+    console.error("[Update Review Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update review");
   }
 }

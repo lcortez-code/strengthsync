@@ -20,10 +20,14 @@ interface DigestRecipient {
 /**
  * Get all users eligible for weekly digest
  */
-export async function getDigestRecipients(): Promise<DigestRecipient[]> {
+export async function getDigestRecipients(
+  scope: { organizationId?: string; userId?: string } = {}
+): Promise<DigestRecipient[]> {
   const members = await prisma.organizationMember.findMany({
     where: {
       status: "ACTIVE",
+      ...(scope.organizationId && { organizationId: scope.organizationId }),
+      ...(scope.userId && { userId: scope.userId }),
       user: {
         emailVerified: true,
       },
@@ -440,7 +444,7 @@ export async function generateDigestNarrative(
   }
 
   // Get user context for strengths info
-  const userContext = await buildUserContext(memberId);
+  const userContext = await buildUserContext(memberId, { organizationId, viewerMemberId: memberId });
   if (!userContext || userContext.topStrengths.length === 0) {
     console.log("[Digest AI] Skipping narrative - no strengths profile");
     return null;
@@ -517,14 +521,14 @@ Write 2-3 sentences that:
     });
 
     if (!result.success || !result.data) {
-      console.error("[Digest AI] Generation failed:", result.error);
+      console.error("[Digest AI] Generation failed:");
       return null;
     }
 
     console.log(`[Digest AI] Generated narrative for ${memberId}`);
     return result.data;
   } catch (error) {
-    console.error("[Digest AI] Error generating narrative:", error);
+    console.error("[Digest AI] Error generating narrative:");
     return null;
   }
 }

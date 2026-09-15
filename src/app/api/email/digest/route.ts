@@ -2,12 +2,13 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
+import { consumeAuthLimits, authProtectionResponse } from "@/lib/auth/request-protection";
+import { claimDigestDelivery, isDigestScheduler } from "@/lib/email/digest-delivery";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { sendEmail, isEmailConfigured } from "@/lib/email/resend";
 import {
   getDigestRecipients,
   getUserDigestData,
-  wasDigestSent,
   getWeeklyDigestPeriod,
   generateDigestNarrative,
 } from "@/lib/email/digest-service";
@@ -66,7 +67,12 @@ export async function GET(request: NextRequest) {
       });
 
       return new Response(html, {
-        headers: { "Content-Type": "text/html" },
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "sandbox; default-src 'none'; img-src https: http:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        },
       });
     }
 
@@ -79,18 +85,20 @@ export async function GET(request: NextRequest) {
       });
 
       return new Response(text, {
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
       });
     }
 
     // Return JSON data
-    return apiSuccess({
+    const response = apiSuccess({
       period: { start, end },
       data: { ...digestData, aiNarrative },
       emailConfigured: isEmailConfigured(),
     });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   } catch (error) {
-    console.error("[Digest Preview] Error:", error);
+    console.error("[Digest Preview] Failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate digest preview");
   }
 }
@@ -100,7 +108,7 @@ export async function GET(request: NextRequest) {
  * Send weekly digest emails to all eligible users
  *
  * This endpoint is designed to be called by:
- * 1. Vercel Cron Jobs (with CRON_SECRET header)
+ * 1. Authenticated scheduler dispatch (via /api/cron/weekly-digest)
  * 2. Admin users manually (authenticated)
  *
  * Query params:
@@ -117,28 +125,32 @@ export async function POST(request: NextRequest) {
     // Support multiple auth methods for cron jobs:
     // 1. Vercel Cron - adds authorization header with CRON_SECRET
     // 2. Manual header - x-cron-secret
-    // 3. Query param - ?secret=CRON_SECRET (for external cron services)
-    const authHeader = request.headers.get("authorization");
-    const cronSecretHeader = request.headers.get("x-cron-secret");
-    const secretParam = searchParams.get("secret");
-    const expectedSecret = process.env.CRON_SECRET;
+    const isCronJob = isDigestScheduler(request);
 
-    const isCronJob =
-      (authHeader && authHeader === `Bearer ${expectedSecret}`) ||
-      cronSecretHeader === expectedSecret ||
-      secretParam === expectedSecret;
-
-    if (!isCronJob) {
-      // Must be authenticated admin
-      const session = await getServerSession(authOptions);
+    // Test sends always require a user and stay within that user's organization,
+    // even when the request also has a valid scheduler credential.
+    const session = !isCronJob || isTest ? await getServerSession(authOptions) : null;
+    if (!isCronJob || isTest) {
       if (!session?.user?.id) {
         return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
       }
 
+      if (!session.user.organizationId || !session.user.memberId) {
+        return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
+      }
+
       // Check admin role
-      if (session.user.role !== "ADMIN" && session.user.role !== "OWNER") {
+      if (!isCronJob && session.user.role !== "ADMIN" && session.user.role !== "OWNER") {
         return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
       }
+    }
+
+    if (isTest) {
+      await consumeAuthLimits([
+        { scope: "digest-test:global", identity: "global", limit: 100 },
+        { scope: "digest-test:organization", identity: session!.user.organizationId!, limit: 10 },
+        { scope: "digest-test:recipient", identity: session!.user.id, limit: 3 },
+      ]);
     }
 
     // Check email configuration
@@ -152,18 +164,12 @@ export async function POST(request: NextRequest) {
     const { start, end } = getWeeklyDigestPeriod();
     const appUrl = process.env.NEXTAUTH_URL || "https://strengthsync.app";
 
-    // Get recipients
-    let recipients = await getDigestRecipients();
-
-    // Filter for test mode or specific user
-    if (isTest) {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.id) {
-        recipients = recipients.filter((r) => r.userId === session.user.id);
-      }
-    } else if (targetUserId) {
-      recipients = recipients.filter((r) => r.userId === targetUserId);
-    }
+    // Only scheduler dispatch may span organizations. Scope is applied in the
+    // database query so tenant administrators never load another tenant's recipients.
+    const recipients = await getDigestRecipients({
+      organizationId: session?.user.organizationId,
+      userId: isTest ? session!.user.id : targetUserId || undefined,
+    });
 
     if (recipients.length === 0) {
       return apiSuccess({
@@ -184,9 +190,9 @@ export async function POST(request: NextRequest) {
     // Process each recipient
     for (const recipient of recipients) {
       try {
-        // Check if already sent
-        const alreadySent = await wasDigestSent(recipient.userId, start, end);
-        if (alreadySent && !isTest) {
+        // Claim before generating content or sending; concurrent dispatch cannot win twice.
+        const deliveryId = await claimDigestDelivery({ userId: recipient.userId, memberId: recipient.memberId, organizationId: recipient.organizationId }, start, end, isTest);
+        if (!deliveryId) {
           results.skipped++;
           continue;
         }
@@ -208,6 +214,7 @@ export async function POST(request: NextRequest) {
           digestData.badgesEarned.length === 0 &&
           digestData.activeChallenges.length === 0
         ) {
+          await prisma.emailDigestLog.update({ where: { id: deliveryId }, data: { status: "SKIPPED" } });
           results.skipped++;
           continue;
         }
@@ -236,21 +243,13 @@ export async function POST(request: NextRequest) {
           unsubscribeUrl,
         });
 
-        // Create log entry
-        const logEntry = await prisma.emailDigestLog.create({
-          data: {
-            userId: recipient.userId,
-            digestType: "WEEKLY",
-            periodStart: start,
-            periodEnd: end,
-            shoutoutsGiven: digestData.shoutoutsGiven,
-            shoutoutsReceived: digestData.shoutoutsReceived.length,
-            pointsEarned: digestData.pointsEarned,
-            badgesEarned: digestData.badgesEarned.length,
-            challengesActive: digestData.activeChallenges.length,
-            status: "PENDING",
-          },
-        });
+        await prisma.emailDigestLog.update({ where: { id: deliveryId }, data: {
+          shoutoutsGiven: digestData.shoutoutsGiven,
+          shoutoutsReceived: digestData.shoutoutsReceived.length,
+          pointsEarned: digestData.pointsEarned,
+          badgesEarned: digestData.badgesEarned.length,
+          challengesActive: digestData.activeChallenges.length,
+        } });
 
         // Send email
         const emailResult = await sendEmail({
@@ -266,11 +265,11 @@ export async function POST(request: NextRequest) {
 
         // Update log entry
         await prisma.emailDigestLog.update({
-          where: { id: logEntry.id },
+          where: { id: deliveryId },
           data: {
             status: emailResult.success ? "SENT" : "FAILED",
             messageId: emailResult.messageId,
-            error: emailResult.error,
+            error: emailResult.success ? null : "delivery_failed",
             sentAt: emailResult.success ? new Date() : null,
           },
         });
@@ -279,13 +278,12 @@ export async function POST(request: NextRequest) {
           results.sent++;
         } else {
           results.failed++;
-          results.errors.push(`${recipient.userEmail}: ${emailResult.error}`);
+          results.errors.push("Email delivery failed");
         }
       } catch (err) {
         results.failed++;
-        results.errors.push(
-          `${recipient.userEmail}: ${err instanceof Error ? err.message : "Unknown error"}`
-        );
+        // A failed or interrupted send keeps its claim for operator reconciliation.
+        results.errors.push("Digest processing failed; delivery requires reconciliation");
       }
     }
 
@@ -299,7 +297,9 @@ export async function POST(request: NextRequest) {
       ...(results.errors.length > 0 && { errors: results.errors }),
     });
   } catch (error) {
-    console.error("[Weekly Digest] Error:", error);
+    const protectedResponse = authProtectionResponse(error);
+    if (protectedResponse) return protectedResponse;
+    console.error("[Weekly Digest] Failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to send weekly digest");
   }
 }

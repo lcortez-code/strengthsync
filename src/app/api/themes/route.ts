@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(data);
   } catch (error) {
-    console.error("Error fetching themes:", error);
+    console.error("Error fetching themes:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch themes");
   }
 }

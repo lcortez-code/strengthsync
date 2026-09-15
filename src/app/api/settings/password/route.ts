@@ -1,3 +1,4 @@
+import { readAuthJson, protectAuthRequest, authProtectionResponse, passwordSchema } from "@/lib/auth/request-protection";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -8,14 +9,9 @@ import { compare, hash } from "bcryptjs";
 
 const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Current password is required"),
-    newPassword: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-      .regex(/[0-9]/, "Password must contain at least one number"),
-    confirmPassword: z.string().min(1, "Please confirm your new password"),
+    currentPassword: z.string().min(1, "Current password is required").max(1024),
+    newPassword: passwordSchema,
+    confirmPassword: z.string().min(1, "Please confirm your new password").max(72),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
@@ -39,7 +35,8 @@ export async function PATCH(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const body = await request.json();
+    await protectAuthRequest("change-password", request.headers, session.user.id);
+    const body = await readAuthJson(request);
     const validation = changePasswordSchema.safeParse(body);
 
     if (!validation.success) {
@@ -79,18 +76,19 @@ export async function PATCH(request: NextRequest) {
     const newPasswordHash = await hash(newPassword, 12);
 
     // Update password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: newPasswordHash },
+    const changed = await prisma.user.updateMany({
+      where: { id: user.id, passwordHash: user.passwordHash },
+      data: { passwordHash: newPasswordHash, passwordResetToken: null, passwordResetExpires: null },
     });
-
-    console.log(`[Settings] Password changed for user: ${user.email}`);
+    if (changed.count !== 1) return apiError(ApiErrorCode.CONFLICT, "Your password changed during this request. Sign in again.");
 
     return apiSuccess({
       message: "Password changed successfully",
     });
   } catch (error) {
-    console.error("[Settings Password Error]", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Password change failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to change password");
   }
 }

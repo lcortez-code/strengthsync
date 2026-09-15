@@ -18,9 +18,9 @@ import { assertLocalDatabaseUrl } from "./assert-local-database.mjs";
 
 const NEW_PASSWORD = process.env.RESET_PASSWORD_VALUE;
 
-if (!NEW_PASSWORD) {
+if (!NEW_PASSWORD || NEW_PASSWORD.length < 8 || Buffer.byteLength(NEW_PASSWORD, "utf8") > 72) {
   console.error(
-    "RESET_PASSWORD_VALUE is not set. Provide the new password for this command only, e.g.\n" +
+    "RESET_PASSWORD_VALUE must be at least 8 characters and within 72 UTF-8 bytes. Set it for this command only, e.g.\n" +
       "  RESET_PASSWORD_VALUE='<password>' npx tsx --env-file=.env scripts/reset-passwords.ts"
   );
   process.exit(1);
@@ -59,16 +59,18 @@ async function resetAllPasswords(newPassword: string) {
   const result = await prisma.user.updateMany({
     data: {
       passwordHash,
+      passwordResetToken: null,
+      passwordResetExpires: null,
     },
   });
 
   console.log(`Successfully updated ${result.count} users.`);
-  console.log("\nAll users can now log in with the RESET_PASSWORD_VALUE password.");
+  console.log("\nCredentials updated. Accounts still require their configured email verification before sign-in.");
 }
 
 resetAllPasswords(NEW_PASSWORD)
   .catch((error) => {
-    console.error("Error resetting passwords:", error);
+    console.error("Local password reset failed");
     process.exit(1);
   })
   .finally(async () => {

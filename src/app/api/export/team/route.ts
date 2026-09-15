@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { csvCell } from "@/lib/api/csv";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
       const csvContent = [
         headers.join(","),
         ...rows.map((row) =>
-          row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")
+          row.map(csvCell).join(",")
         ),
       ].join("\n");
 
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error exporting team data:", error);
+    console.error("Error exporting team data:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to export data");
   }
 }

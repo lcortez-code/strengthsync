@@ -232,7 +232,7 @@ For each suggestion:
     });
 
     if (!result.success) {
-      console.error("[AI Recognition Prompts] Generation failed:", result.error);
+      console.error("[AI Recognition Prompts] Generation failed:");
       // Return empty suggestions as fallback instead of error
       return apiSuccess({
         suggestions: [],
@@ -258,7 +258,7 @@ For each suggestion:
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Recognition Prompts Error]", error);
+    console.error("[AI Recognition Prompts Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate recognition prompts");
   }
 }

@@ -5,13 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { sendTestCard } from "@/lib/integrations/teams-webhook";
 import { z } from "zod";
+import { isTeamsWebhookUrl, getTeamsFallbackUrl } from "@/lib/integrations/teams-url";
 
 const webhookUrlSchema = z.object({
   webhookUrl: z
     .string()
     .url("Must be a valid URL")
     .startsWith("https://", "Webhook URL must use HTTPS")
-    .max(1000),
+    .max(1000)
+    .refine(isTeamsWebhookUrl, "Use a Microsoft Teams connector or Workflows URL"),
 });
 
 /**
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
       maskedUrl,
     });
   } catch (error) {
-    console.error("[Teams Integration] GET error:", error);
+    console.error("[Teams Integration] GET error:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to get Teams configuration");
   }
 }
@@ -133,7 +135,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess({ configured: true, message: "Teams webhook URL updated" });
   } catch (error) {
-    console.error("[Teams Integration] PATCH error:", error);
+    console.error("[Teams Integration] PATCH error:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update Teams configuration");
   }
 }
@@ -163,7 +165,7 @@ export async function POST(request: NextRequest) {
     });
 
     const settings = org?.settings as Record<string, unknown> | null;
-    const webhookUrl = (settings?.teamsWebhookUrl as string) || process.env.TEAMS_WEBHOOK_URL;
+    const webhookUrl = (settings?.teamsWebhookUrl as string) || getTeamsFallbackUrl(organizationId);
 
     if (!webhookUrl) {
       return apiError(ApiErrorCode.BAD_REQUEST, "No Teams webhook URL configured");
@@ -177,7 +179,7 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Failed to send test message. Please verify the webhook URL.");
     }
   } catch (error) {
-    console.error("[Teams Integration] POST test error:", error);
+    console.error("[Teams Integration] POST test error:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to send test message");
   }
 }

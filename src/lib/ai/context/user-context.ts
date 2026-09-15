@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
+import type { AIProfileAccess } from "@/lib/ai/context/access";
 
 export interface UserStrengthContext {
   name: string;
@@ -47,6 +49,7 @@ export interface ReviewInfo {
 }
 
 export interface UserContext {
+  isFullProfile: boolean;
   memberId: string;
   userId: string;
   fullName: string;
@@ -76,9 +79,13 @@ export interface UserContext {
 }
 
 // Build context about a user for AI prompts
-export async function buildUserContext(memberId: string): Promise<UserContext | null> {
-  const member = await prisma.organizationMember.findUnique({
-    where: { id: memberId },
+export async function buildUserContext(memberId: string, access: AIProfileAccess): Promise<UserContext | null> {
+  const isFullProfile = canViewFullProfile({ ...access, targetMemberId: memberId });
+  const visibleShoutouts = {
+    OR: [{ isPublic: true }, { giverId: access.viewerMemberId }, { receiverId: access.viewerMemberId }],
+  };
+  const member = await prisma.organizationMember.findFirst({
+    where: { id: memberId, organizationId: access.organizationId, status: "ACTIVE" },
     include: {
       user: {
         select: {
@@ -94,6 +101,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
         select: { id: true },
       },
       strengths: {
+        where: isFullProfile ? undefined : { rank: { lte: 5 } },
         include: {
           theme: {
             include: {
@@ -106,6 +114,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
         orderBy: { rank: "asc" },
       },
       badgesEarned: {
+        where: isFullProfile ? undefined : { id: { in: [] } },
         include: {
           badge: {
             select: { name: true },
@@ -114,6 +123,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Mentorships where user is mentor
       mentorshipsAsMentor: {
+        where: { OR: [{ mentorId: access.viewerMemberId }, { menteeId: access.viewerMemberId }] },
         include: {
           mentee: {
             include: {
@@ -128,6 +138,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Mentorships where user is mentee
       mentorshipsAsMentee: {
+        where: { OR: [{ mentorId: access.viewerMemberId }, { menteeId: access.viewerMemberId }] },
         include: {
           mentor: {
             include: {
@@ -142,6 +153,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Shoutouts given
       shoutoutsGiven: {
+        where: isFullProfile ? visibleShoutouts : { id: { in: [] } },
         take: 10,
         orderBy: { createdAt: "desc" },
         include: {
@@ -153,6 +165,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Shoutouts received
       shoutoutsReceived: {
+        where: isFullProfile ? visibleShoutouts : { id: { in: [] } },
         take: 10,
         orderBy: { createdAt: "desc" },
         include: {
@@ -164,11 +177,13 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Skill requests created
       skillRequestsCreated: {
+        where: isFullProfile ? undefined : { id: { in: [] } },
         take: 10,
         orderBy: { createdAt: "desc" },
       },
       // Skill request responses
       skillRequestResponses: {
+        where: isFullProfile ? undefined : { id: { in: [] } },
         take: 10,
         orderBy: { createdAt: "desc" },
         include: {
@@ -179,6 +194,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Challenge participations
       challengeParticipations: {
+        where: isFullProfile ? undefined : { id: { in: [] } },
         include: {
           challenge: {
             select: { name: true, challengeType: true, status: true },
@@ -187,6 +203,12 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
       },
       // Reviews
       reviewsAsSubject: {
+        where: {
+          cycle: { organizationId: access.organizationId },
+          ...(access.viewerRole === "OWNER" || access.viewerRole === "ADMIN"
+            ? {}
+            : { OR: [{ memberId: access.viewerMemberId }, { reviewerId: access.viewerMemberId }] }),
+        },
         include: {
           cycle: { select: { name: true } },
           _count: { select: { goals: true } },
@@ -203,13 +225,13 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   // Get leaderboard rank
-  const membersAbove = await prisma.organizationMember.count({
+  const membersAbove = isFullProfile ? await prisma.organizationMember.count({
     where: {
       organizationId: member.organization.id,
       status: "ACTIVE",
       points: { gt: member.points },
     },
-  });
+  }) : 0;
   const leaderboardRank = membersAbove + 1;
 
   // Count recent activity
@@ -232,7 +254,7 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
     rank: s.rank,
     domain: s.theme.domain.name,
     domainSlug: s.theme.domain.slug,
-    personalizedDescription: s.personalizedDescription || undefined,
+    personalizedDescription: isFullProfile ? s.personalizedDescription || undefined : undefined,
   }));
 
   const topStrengths = allStrengths.filter((s) => s.rank <= 5);
@@ -314,21 +336,22 @@ export async function buildUserContext(memberId: string): Promise<UserContext | 
   }));
 
   return {
+    isFullProfile,
     memberId,
     userId: member.user.id,
     fullName: member.user.fullName,
     email: member.user.email,
     jobTitle: member.user.jobTitle || undefined,
     department: member.user.department || undefined,
-    bio: member.user.bio || undefined,
+    bio: isFullProfile ? member.user.bio || undefined : undefined,
     role: member.role,
     joinedAt: member.joinedAt.toISOString().split("T")[0],
     topStrengths,
     allStrengths,
     dominantDomain,
     badges: member.badgesEarned.map((b) => b.badge.name),
-    points: member.points,
-    leaderboardRank,
+    points: isFullProfile ? member.points : 0,
+    leaderboardRank: isFullProfile ? leaderboardRank : undefined,
     mentorships,
     recentShoutouts,
     skillRequests,
@@ -384,6 +407,8 @@ export function formatUserContextForPrompt(context: UserContext): string {
   if (context.dominantDomain) {
     lines.push(`Dominant Domain: ${context.dominantDomain}`);
   }
+
+  if (!context.isFullProfile) return lines.join("\n");
 
   // Gamification
   lines.push(`\n**Gamification:**`);
@@ -445,10 +470,11 @@ export function formatUserContextForPrompt(context: UserContext): string {
 
 // Get minimal context for simple prompts
 export async function getMinimalUserContext(
-  memberId: string
+  memberId: string,
+  organizationId: string
 ): Promise<{ name: string; topStrengths: string[]; dominantDomain: string | null } | null> {
-  const member = await prisma.organizationMember.findUnique({
-    where: { id: memberId },
+  const member = await prisma.organizationMember.findFirst({
+    where: { id: memberId, organizationId, status: "ACTIVE" },
     include: {
       user: {
         select: { fullName: true },

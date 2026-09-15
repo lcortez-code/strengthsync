@@ -1,3 +1,5 @@
+import { readAuthJson as readBoundedJson, authProtectionResponse } from "@/lib/auth/request-protection";
+import { parseChallengeRules, ChallengeRulesError } from "@/lib/challenges/rules";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -18,7 +20,7 @@ const createChallengeSchema = z.object({
   ]),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
-  rules: z.record(z.unknown()).optional(),
+  rules: z.unknown().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -35,8 +37,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status"); // UPCOMING, ACTIVE, COMPLETED
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const requestedPage = Number(searchParams.get("page") || "1");
+    const requestedLimit = Number(searchParams.get("limit") || "10");
+    const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(10000, requestedPage)) : 1;
+    const limit = Number.isSafeInteger(requestedLimit) ? Math.max(1, Math.min(100, requestedLimit)) : 10;
 
     const memberId = session.user.memberId;
 
@@ -51,6 +55,7 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         participants: {
+          where: { member: { organizationId, status: "ACTIVE" } },
           include: {
             member: {
               include: {
@@ -62,7 +67,7 @@ export async function GET(request: NextRequest) {
           take: 5,
         },
         _count: {
-          select: { participants: true },
+          select: { participants: { where: { member: { organizationId, status: "ACTIVE" } } } },
         },
       },
       orderBy: [{ status: "asc" }, { startsAt: "desc" }],
@@ -103,7 +108,7 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching challenges:", error);
+    console.error("Error fetching challenges:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch challenges");
   }
 }
@@ -128,7 +133,7 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.FORBIDDEN, "Only admins can create challenges");
     }
 
-    const body = await request.json();
+    const body = await readBoundedJson(request);
     const validation = createChallengeSchema.safeParse(body);
 
     if (!validation.success) {
@@ -144,6 +149,8 @@ export async function POST(request: NextRequest) {
     const startDate = new Date(startsAt);
     const endDate = new Date(endsAt);
 
+    if (endDate <= startDate) return apiError(ApiErrorCode.VALIDATION_ERROR, "End date must be after start date");
+
     let status: "UPCOMING" | "ACTIVE" | "COMPLETED" = "UPCOMING";
     if (now >= startDate && now < endDate) {
       status = "ACTIVE";
@@ -152,7 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate rules based on challenge type
-    const defaultRules = generateDefaultRules(challengeType);
+    const validatedRules = parseChallengeRules(challengeType, rules);
 
     const challenge = await prisma.teamChallenge.create({
       data: {
@@ -163,7 +170,7 @@ export async function POST(request: NextRequest) {
         startsAt: startDate,
         endsAt: endDate,
         status,
-        rules: JSON.parse(JSON.stringify(rules || defaultRules)),
+        rules: JSON.parse(JSON.stringify(validatedRules)),
         rewards: JSON.parse(JSON.stringify({ points: 50, badge: `${challengeType.toLowerCase()}-champion` })),
       },
     });
@@ -177,35 +184,10 @@ export async function POST(request: NextRequest) {
       endsAt: challenge.endsAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error creating challenge:", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    if (error instanceof ChallengeRulesError) return apiError(ApiErrorCode.VALIDATION_ERROR, error.message);
+    console.error("Challenge creation failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create challenge");
-  }
-}
-
-function generateDefaultRules(type: string): Record<string, unknown> {
-  switch (type) {
-    case "STRENGTHS_BINGO":
-      return {
-        gridSize: 5,
-        winCondition: "row_or_column", // row_or_column, diagonal, full_board
-        themesPerSquare: 1,
-      };
-    case "SHOUTOUT_STREAK":
-      return {
-        targetDays: 7,
-        shoutoutsPerDay: 1,
-      };
-    case "MENTORSHIP_MONTH":
-      return {
-        sessionsRequired: 4,
-        durationMinutes: 30,
-      };
-    case "COLLABORATION_QUEST":
-      return {
-        tasksRequired: 5,
-        uniquePartnersRequired: 3,
-      };
-    default:
-      return {};
   }
 }

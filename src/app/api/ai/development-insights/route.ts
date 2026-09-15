@@ -9,6 +9,7 @@ import {
   getMinimalUserContext,
 } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 
 const developmentInsightsSchema = z.object({
   targetMemberId: z.string().optional(), // If not provided, uses current user
@@ -46,9 +47,14 @@ export async function POST(request: NextRequest) {
 
     const { targetMemberId, focusTheme } = validation.data;
     const targetId = targetMemberId || memberId;
+    const isFullProfile = canViewFullProfile({
+      viewerMemberId: memberId,
+      viewerRole: session.user.role,
+      targetMemberId: targetId,
+    });
 
     // Get member context
-    const userContext = await getMinimalUserContext(targetId);
+    const userContext = await getMinimalUserContext(targetId, organizationId);
 
     if (!userContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Member not found");
@@ -63,13 +69,13 @@ export async function POST(request: NextRequest) {
 
     // Get additional context for richer insights
     const memberDetails = await prisma.organizationMember.findFirst({
-      where: { id: targetId },
+      where: { id: targetId, organizationId, status: "ACTIVE" },
       include: {
         user: {
           select: { fullName: true, jobTitle: true },
         },
         strengths: {
-          where: { rank: { lte: 10 } },
+          where: { rank: { lte: isFullProfile ? 10 : 5 } },
           include: {
             theme: {
               include: {
@@ -80,6 +86,9 @@ export async function POST(request: NextRequest) {
           orderBy: { rank: "asc" },
         },
         shoutoutsReceived: {
+          where: isFullProfile ? {
+            OR: [{ isPublic: true }, { giverId: memberId }, { receiverId: memberId }],
+          } : { id: { in: [] } },
           take: 5,
           orderBy: { createdAt: "desc" },
           include: {
@@ -181,7 +190,7 @@ Provide insights for their top 3-5 strengths. Return only valid JSON.`;
     });
 
     if (!result.success) {
-      console.error("[AI Development Insights] Generation failed:", result.error);
+      console.error("[AI Development Insights] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate insights"
@@ -242,7 +251,7 @@ Provide insights for their top 3-5 strengths. Return only valid JSON.`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Development Insights Error]", error);
+    console.error("[AI Development Insights Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate development insights");
   }
 }

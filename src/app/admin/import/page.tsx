@@ -85,7 +85,7 @@ export default function AdminImportPage() {
                 <li className="flex items-center gap-2">
                   <FileText className="h-3 w-3" /> Optionally attach a CliftonStrengths PDF for each member
                 </li>
-                <li>New users will receive temporary passwords you can share with them</li>
+                <li>New users receive an email to verify their address, choose a password, and accept the invitation</li>
                 <li>Existing users will be added to your organization without a new password</li>
               </ul>
             </div>

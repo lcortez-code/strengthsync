@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     const { title, description, domainNeeded, urgency } = validation.data;
 
     // Get user context for personalization
-    const userContext = await getMinimalUserContext(memberId);
+    const userContext = await getMinimalUserContext(memberId, organizationId);
 
     // Build the system prompt
     const systemPrompt = `You are a skill request optimizer for StrengthSync, a CliftonStrengths-based team collaboration app.
@@ -103,7 +103,7 @@ Return only a JSON object with "improvedTitle" and "improvedDescription" fields.
     });
 
     if (!result.success) {
-      console.error("[AI Improve Skill Request] Generation failed:", result.error);
+      console.error("[AI Improve Skill Request] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to improve skill request"
@@ -145,7 +145,7 @@ Return only a JSON object with "improvedTitle" and "improvedDescription" fields.
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Improve Skill Request Error]", error);
+    console.error("[AI Improve Skill Request Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to improve skill request");
   }
 }

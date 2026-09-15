@@ -49,8 +49,10 @@ export interface ImportRowResult {
   data?: {
     memberId: string;
     userId: string;
-    tempPassword?: string;
     isNewUser: boolean;
+    status?: "ACTIVE" | "PENDING";
+    invitationSent?: boolean;
+    message?: string;
     strengthsImported: boolean;
     themesFound?: number;
   };

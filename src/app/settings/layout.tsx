@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { SessionProvider } from "@/components/providers/SessionProvider";
 
 export default async function SettingsLayout({
   children,
@@ -15,9 +14,5 @@ export default async function SettingsLayout({
     redirect("/auth/login");
   }
 
-  return (
-    <SessionProvider session={session}>
-      <DashboardLayout>{children}</DashboardLayout>
-    </SessionProvider>
-  );
+  return <DashboardLayout>{children}</DashboardLayout>;
 }

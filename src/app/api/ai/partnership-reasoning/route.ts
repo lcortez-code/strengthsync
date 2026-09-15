@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -14,7 +15,7 @@ const CACHE_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const partnershipReasoningSchema = z.object({
   member1Id: z.string().min(1, "Member 1 ID is required"),
   member2Id: z.string().min(1, "Member 2 ID is required"),
-  context: z.string().optional(), // Optional project or collaboration context
+  context: z.string().max(4000).optional(), // Optional project or collaboration context
 });
 
 export async function POST(request: NextRequest) {
@@ -47,8 +48,8 @@ export async function POST(request: NextRequest) {
 
     // Build context for both members
     const [member1Context, member2Context] = await Promise.all([
-      buildUserContext(member1Id),
-      buildUserContext(member2Id),
+      buildUserContext(member1Id, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }),
+      buildUserContext(member2Id, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }),
     ]);
 
     if (!member1Context || !member2Context) {
@@ -66,6 +67,16 @@ export async function POST(request: NextRequest) {
     const currentMember1Strengths = member1Context.topStrengths.map((s) => s.name).sort();
     const currentMember2Strengths = member2Context.topStrengths.map((s) => s.name).sort();
 
+    // Bind cached output to the requesting member and exact authorized prompt inputs.
+    // Historical unbound entries cannot serve another caller's private context.
+    const inputFingerprint = createHash("sha256").update(JSON.stringify({
+      version: 1, organizationId, viewerMemberId: memberId, context: context || "",
+      members: [member1Context, member2Context].map(member => ({
+        id: member.memberId, name: member.fullName, jobTitle: member.jobTitle,
+        strengths: member.topStrengths, dominantDomain: member.dominantDomain,
+      })),
+    })).digest("hex");
+
     // Check for cached reasoning
     const cachedReasoning = await prisma.partnershipReasoning.findUnique({
       where: {
@@ -78,7 +89,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return cached reasoning if valid (not expired and strengths haven't changed)
-    if (cachedReasoning && cachedReasoning.expiresAt > new Date()) {
+    if (cachedReasoning && cachedReasoning.inputFingerprint === inputFingerprint && cachedReasoning.expiresAt > new Date()) {
       // Check if strengths are still the same (sorted for comparison)
       const cachedM1Strengths = [...cachedReasoning.member1Strengths].sort();
       const cachedM2Strengths = [...cachedReasoning.member2Strengths].sort();
@@ -92,7 +103,7 @@ export async function POST(request: NextRequest) {
         JSON.stringify(cachedM2Strengths) === JSON.stringify(sortedCurrentM2);
 
       if (strengthsMatch) {
-        console.log(`[AI Partnership Reasoning] Returning cached analysis for ${member1Context.fullName} + ${member2Context.fullName}`);
+        console.log("[AI Partnership Reasoning] Returning current caller analysis");
         return apiSuccess({
           reasoning: cachedReasoning.reasoning,
           partners: {
@@ -213,7 +224,7 @@ Dominant Domain: ${member2Context.dominantDomain || "Balanced"}`;
     });
 
     if (!result.success || !result.data) {
-      console.error("[AI Partnership Reasoning] Generation failed:", result.error);
+      console.error("[AI Partnership Reasoning] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate partnership analysis"
@@ -221,7 +232,7 @@ Dominant Domain: ${member2Context.dominantDomain || "Balanced"}`;
     }
 
     const generatedReasoning = result.data;
-    console.log(`[AI Partnership Reasoning] Generated new analysis for ${member1Context.fullName} + ${member2Context.fullName}`);
+    console.log("[AI Partnership Reasoning] Generated analysis");
 
     // Cache the reasoning for future requests
     const expiresAt = new Date(Date.now() + CACHE_DURATION_MS);
@@ -237,6 +248,7 @@ Dominant Domain: ${member2Context.dominantDomain || "Balanced"}`;
         },
       },
       create: {
+        inputFingerprint,
         organizationId,
         member1Id: sortedMember1Id,
         member2Id: sortedMember2Id,
@@ -246,6 +258,7 @@ Dominant Domain: ${member2Context.dominantDomain || "Balanced"}`;
         expiresAt,
       },
       update: {
+        inputFingerprint,
         reasoning: generatedReasoning,
         member1Strengths: sortedM1Strengths,
         member2Strengths: sortedM2Strengths,
@@ -274,7 +287,7 @@ Dominant Domain: ${member2Context.dominantDomain || "Balanced"}`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Partnership Reasoning Error]", error);
+    console.error("[AI Partnership Reasoning Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to analyze partnership");
   }
 }

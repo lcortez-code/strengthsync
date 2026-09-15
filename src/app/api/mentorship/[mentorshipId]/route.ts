@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { checkAndAwardBadges } from "@/lib/gamification/badge-engine";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 
 // GET - Get a specific mentorship
 export async function GET(
@@ -17,7 +18,8 @@ export async function GET(
     }
 
     const memberId = session.user.memberId;
-    if (!memberId) {
+    const organizationId = session.user.organizationId;
+    if (!memberId || !organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -27,6 +29,8 @@ export async function GET(
       where: {
         id: mentorshipId,
         OR: [{ mentorId: memberId }, { menteeId: memberId }],
+        mentor: { organizationId, status: "ACTIVE" },
+        mentee: { organizationId, status: "ACTIVE" },
       },
       include: {
         mentor: {
@@ -56,9 +60,30 @@ export async function GET(
       return apiError(ApiErrorCode.NOT_FOUND, "Mentorship not found");
     }
 
-    return apiSuccess(mentorship);
+    const projectMember = (member: typeof mentorship.mentor) => {
+      const full = canViewFullProfile({ viewerRole: session.user.role, viewerMemberId: memberId, targetMemberId: member.id });
+      return {
+        id: member.id,
+        user: member.user,
+        strengths: member.strengths.filter((strength) => strength.rank <= 5).map((strength) => ({
+          id: strength.id,
+          rank: strength.rank,
+          ...(full && {
+            personalizedDescription: strength.personalizedDescription,
+            personalizedInsights: strength.personalizedInsights,
+            strengthBlends: strength.strengthBlends,
+            applySection: strength.applySection,
+          }),
+          theme: {
+            name: strength.theme.name, slug: strength.theme.slug,
+            shortDescription: strength.theme.shortDescription, domain: strength.theme.domain,
+          },
+        })),
+      };
+    };
+    return apiSuccess({ ...mentorship, mentor: projectMember(mentorship.mentor), mentee: projectMember(mentorship.mentee) });
   } catch (error) {
-    console.error("[Get Mentorship Error]", error);
+    console.error("[Get Mentorship Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to get mentorship");
   }
 }
@@ -75,7 +100,8 @@ export async function PATCH(
     }
 
     const memberId = session.user.memberId;
-    if (!memberId) {
+    const organizationId = session.user.organizationId;
+    if (!memberId || !organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -92,6 +118,8 @@ export async function PATCH(
       where: {
         id: mentorshipId,
         OR: [{ mentorId: memberId }, { menteeId: memberId }],
+        mentor: { organizationId, status: "ACTIVE" },
+        mentee: { organizationId, status: "ACTIVE" },
       },
       include: {
         mentor: {
@@ -108,7 +136,6 @@ export async function PATCH(
     }
 
     const isMentor = mentorship.mentorId === memberId;
-    const isMentee = mentorship.menteeId === memberId;
 
     // Validate action permissions
     if (action === "accept" || action === "decline") {
@@ -145,69 +172,91 @@ export async function PATCH(
 
     const newStatus = statusMap[action];
 
-    // Update mentorship
-    const updated = await prisma.mentorship.update({
-      where: { id: mentorshipId },
-      data: {
-        status: newStatus,
-        ...(action === "accept" && { startedAt: new Date() }),
-        ...(action === "complete" && { endedAt: new Date() }),
-      },
-      include: {
-        mentor: {
-          include: { user: { select: { id: true, fullName: true } } },
+    // Only the request that changes the expected status can award points or notify.
+    const updated = await prisma.$transaction(async (tx) => {
+      const changed = await tx.mentorship.updateMany({
+        where: {
+          id: mentorshipId, status: mentorship.status,
+          mentorId: mentorship.mentorId, menteeId: mentorship.menteeId,
+          OR: [{ mentorId: memberId }, { menteeId: memberId }],
+          mentor: { organizationId, status: "ACTIVE" },
+          mentee: { organizationId, status: "ACTIVE" },
         },
-        mentee: {
-          include: { user: { select: { id: true, fullName: true } } },
+        data: {
+          status: newStatus,
+          ...(action === "accept" && { startedAt: new Date() }),
+          ...(action === "complete" && { endedAt: new Date() }),
         },
-      },
-    });
+      });
+      if (changed.count !== 1) return null;
+      const updated = await tx.mentorship.findFirst({
+        where: {
+          id: mentorshipId,
+          mentor: { organizationId, status: "ACTIVE" },
+          mentee: { organizationId, status: "ACTIVE" },
+        },
+        include: {
+          mentor: {
+            include: { user: { select: { id: true, fullName: true } } },
+          },
+          mentee: {
+            include: { user: { select: { id: true, fullName: true } } },
+          },
+        },
+      });
+      if (!updated) throw new Error("Mentorship access changed during the update");
 
-    // Create notification for the other party
-    const notifyUserId = isMentor ? updated.mentee.user.id : updated.mentor.user.id;
-    const actorName = isMentor ? updated.mentor.user.fullName : updated.mentee.user.fullName;
+      // Create notification for the other party
+      const notifyUserId = isMentor ? updated.mentee.user.id : updated.mentor.user.id;
+      const actorName = isMentor ? updated.mentor.user.fullName : updated.mentee.user.fullName;
 
-    const notificationConfig: Record<string, { type: "MENTORSHIP_ACCEPTED" | "MENTORSHIP_DECLINED" | "SYSTEM"; title: string; message: string }> = {
-      accept: {
-        type: "MENTORSHIP_ACCEPTED",
-        title: "Mentorship Request Accepted",
-        message: `${actorName} has accepted your mentorship request!`,
-      },
-      decline: {
-        type: "MENTORSHIP_DECLINED",
-        title: "Mentorship Request Declined",
-        message: `${actorName} has declined your mentorship request.`,
-      },
-      pause: {
-        type: "SYSTEM",
-        title: "Mentorship Paused",
-        message: `${actorName} has paused your mentorship connection.`,
-      },
-      complete: {
-        type: "SYSTEM",
-        title: "Mentorship Completed",
-        message: `${actorName} has marked your mentorship as completed.`,
-      },
-    };
+      const notificationConfig: Record<string, { type: "MENTORSHIP_ACCEPTED" | "MENTORSHIP_DECLINED" | "SYSTEM"; title: string; message: string }> = {
+        accept: {
+          type: "MENTORSHIP_ACCEPTED",
+          title: "Mentorship Request Accepted",
+          message: `${actorName} has accepted your mentorship request!`,
+        },
+        decline: {
+          type: "MENTORSHIP_DECLINED",
+          title: "Mentorship Request Declined",
+          message: `${actorName} has declined your mentorship request.`,
+        },
+        pause: {
+          type: "SYSTEM",
+          title: "Mentorship Paused",
+          message: `${actorName} has paused your mentorship connection.`,
+        },
+        complete: {
+          type: "SYSTEM",
+          title: "Mentorship Completed",
+          message: `${actorName} has marked your mentorship as completed.`,
+        },
+      };
 
-    await prisma.notification.create({
-      data: {
-        userId: notifyUserId,
-        type: notificationConfig[action].type,
-        title: notificationConfig[action].title,
-        message: notificationConfig[action].message,
-        link: "/mentorship",
-      },
-    });
-
-    // Award points for accepting mentorship
-    if (action === "accept") {
-      // Award points to mentor for accepting
-      await prisma.organizationMember.update({
-        where: { id: memberId },
-        data: { points: { increment: 20 } },
+      await tx.notification.create({
+        data: {
+          userId: notifyUserId,
+          type: notificationConfig[action].type,
+          title: notificationConfig[action].title,
+          message: notificationConfig[action].message,
+          link: "/mentorship",
+        },
       });
 
+      // Award points for accepting mentorship
+      if (action === "accept") {
+        // Award points to mentor for accepting
+        const rewarded = await tx.organizationMember.updateMany({
+          where: { id: memberId, organizationId, status: "ACTIVE" },
+          data: { points: { increment: 20 } },
+        });
+        if (rewarded.count !== 1) throw new Error("Mentor membership changed during the update");
+      }
+      return updated;
+    });
+    if (!updated) return apiError(ApiErrorCode.CONFLICT, "Mentorship status or membership changed. Refresh and try again.");
+
+    if (action === "accept") {
       // Badge engine: check for mentorship-started badges (both parties)
       await checkAndAwardBadges(updated.mentorId, "mentorship_started");
       await checkAndAwardBadges(updated.menteeId, "mentorship_started");
@@ -225,7 +274,7 @@ export async function PATCH(
       message: `Mentorship ${action}ed successfully`,
     });
   } catch (error) {
-    console.error("[Update Mentorship Error]", error);
+    console.error("[Update Mentorship Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update mentorship");
   }
 }

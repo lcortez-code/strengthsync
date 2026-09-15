@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -72,21 +71,7 @@ export default function RegisterPage() {
         return;
       }
 
-      // Sign in automatically after registration
-      const result = await signIn("credentials", {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        // Registration succeeded but sign in failed - redirect to login
-        router.push("/auth/login?registered=true");
-        return;
-      }
-
-      router.push("/dashboard?welcome=true");
-      router.refresh();
+      router.push("/auth/verify-email");
     } catch (err) {
       setError("An unexpected error occurred");
       setIsLoading(false);

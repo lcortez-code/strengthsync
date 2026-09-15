@@ -436,13 +436,13 @@ export default function AdminAIPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" asChild>
+                {session?.user?.isPlatformAdmin && <Button variant="outline" asChild>
                   <Link href="/admin/ai/prompts">
                     <FileText className="h-4 w-4 mr-2" />
                     Manage Prompts
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Link>
-                </Button>
+                </Button>}
                 <Button variant="outline" asChild>
                   <Link href="/admin/dashboard">
                     <TrendingUp className="h-4 w-4 mr-2" />

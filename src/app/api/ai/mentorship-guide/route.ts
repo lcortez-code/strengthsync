@@ -80,12 +80,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { mentorshipId, mentorId, menteeId, focusThemes, duration } = validation.data;
+    const { mentorshipId, focusThemes, duration } = validation.data;
+    const mentorshipScope = {
+      id: mentorshipId,
+      mentor: { organizationId, status: "ACTIVE" as const },
+      mentee: { organizationId, status: "ACTIVE" as const },
+      OR: [{ mentorId: memberId }, { menteeId: memberId }],
+    };
+    const mentorship = await prisma.mentorship.findFirst({ where: mentorshipScope });
+    if (!mentorship) {
+      return apiError(ApiErrorCode.NOT_FOUND, "Mentorship not found");
+    }
+    const { mentorId, menteeId } = mentorship;
+    if (validation.data.mentorId !== mentorId || validation.data.menteeId !== menteeId) {
+      return apiError(ApiErrorCode.BAD_REQUEST, "Mentorship participants do not match");
+    }
 
     // Build context for both members
     const [mentorContext, menteeContext] = await Promise.all([
-      buildUserContext(mentorId),
-      buildUserContext(menteeId),
+      buildUserContext(mentorId, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }),
+      buildUserContext(menteeId, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role }),
     ]);
 
     if (!mentorContext || !menteeContext) {
@@ -194,7 +208,7 @@ Dominant Domain: ${menteeContext.dominantDomain || "Balanced"}
     });
 
     if (!result.success) {
-      console.error("[AI Mentorship Guide] Generation failed:", result.error);
+      console.error("[AI Mentorship Guide] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate mentorship guide"
@@ -202,10 +216,13 @@ Dominant Domain: ${menteeContext.dominantDomain || "Balanced"}
     }
 
     // Save the guide to the database
-    await prisma.mentorship.update({
-      where: { id: mentorshipId },
+    const saved = await prisma.mentorship.updateMany({
+      where: { ...mentorshipScope, mentorId, menteeId },
       data: { guide: JSON.parse(JSON.stringify(result.data)) },
     });
+    if (saved.count !== 1) {
+      return apiError(ApiErrorCode.NOT_FOUND, "Mentorship no longer available");
+    }
 
     console.log(`[AI Mentorship Guide] Generated and saved guide for ${mentorContext.fullName} -> ${menteeContext.fullName}`);
 
@@ -230,7 +247,7 @@ Dominant Domain: ${menteeContext.dominantDomain || "Balanced"}
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Mentorship Guide Error]", error);
+    console.error("[AI Mentorship Guide Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate mentorship guide");
   }
 }

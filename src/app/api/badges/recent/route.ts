@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(data);
   } catch (error) {
-    console.error("Error fetching recent badges:", error);
+    console.error("Error fetching recent badges:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch recent badges");
   }
 }
@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess({ acknowledged: true });
   } catch (error) {
-    console.error("Error acknowledging badge:", error);
+    console.error("Error acknowledging badge:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to acknowledge badge");
   }
 }

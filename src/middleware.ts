@@ -23,15 +23,11 @@ const protectedRoutes = [
   "/chat",
 ];
 
-// Routes that should redirect to dashboard if authenticated
-const authRoutes = ["/auth/login", "/auth/register"];
-
 // Admin-only routes (OWNER/ADMIN only - MANAGER cannot access)
 // These routes involve member management, data imports, and system configuration
 const adminOnlyRoutes = [
   "/admin/members",
   "/admin/import",
-  "/admin/constants",
   "/admin/upload",
   "/admin/excel-import",
 ];
@@ -47,11 +43,6 @@ export async function middleware(request: NextRequest) {
 
   // Check if the route is protected
   const isProtectedRoute = protectedRoutes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  );
-
-  // Check if it's an auth route
-  const isAuthRoute = authRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
@@ -71,10 +62,8 @@ export async function middleware(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  // Redirect authenticated users away from auth routes
-  if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+  // A decryptable JWT may have been revoked in the database. Always allow the
+  // login page so stale sessions can authenticate again without a redirect loop.
 
   // Redirect unauthenticated users to login for protected routes
   if (isProtectedRoute && !token) {

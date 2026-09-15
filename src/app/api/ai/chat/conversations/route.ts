@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     return apiCreated(conversation);
   } catch (error) {
-    console.error("[Create Conversation Error]", error);
+    console.error("[Create Conversation Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create conversation");
   }
 }
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(conversations);
   } catch (error) {
-    console.error("[List Conversations Error]", error);
+    console.error("[List Conversations Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to list conversations");
   }
 }

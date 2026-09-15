@@ -8,6 +8,7 @@ import {
   readlinkSync,
 } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { dirname, join, relative, resolve } from "node:path";
 
 const POSTGRES_URL_PATTERN = /\bpostgres(?:ql)?:\/\/[^\s"'`]+/giu;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -168,6 +169,14 @@ function listStagedPaths() {
 
 function readWorkingTreeBytes(filePath) {
   try {
+    const root = process.cwd();
+    const parentPath = relative(root, resolve(dirname(filePath)));
+    if (parentPath === ".." || parentPath.startsWith("../")) throw new Error("Outside repository");
+    let parent = root;
+    for (const component of parentPath.split(/[\\/]/u).filter(Boolean)) {
+      parent = join(parent, component);
+      if (lstatSync(parent).isSymbolicLink()) throw new Error("Symlink ancestor");
+    }
     if (lstatSync(filePath).isSymbolicLink()) {
       return readlinkSync(filePath, { encoding: "buffer" });
     }
@@ -181,7 +190,10 @@ function readWorkingTreeBytes(filePath) {
     } finally {
       closeSync(descriptor);
     }
-  } catch {
+  } catch (error) {
+    // An unstaged deletion still exists in the index. Scan those bytes rather
+    // than ignoring the path or blocking every legitimate file removal.
+    if (error?.code === "ENOENT") return readStagedBytes(filePath);
     throw new SecretScanError(
       `${sanitizePath(filePath)}: unable to read tracked bytes`
     );

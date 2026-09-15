@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build team context
-    const teamContext = await buildTeamContext(organizationId);
+    const teamContext = await buildTeamContext(organizationId, { viewerMemberId: memberId, viewerRole: session.user.role });
 
     if (!teamContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Organization not found");
@@ -123,7 +123,7 @@ Provide 3-5 prioritized recommendations with practical action steps. Return only
     });
 
     if (!result.success) {
-      console.error("[AI Gap Recommendations] Generation failed:", result.error);
+      console.error("[AI Gap Recommendations] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate recommendations"
@@ -178,7 +178,7 @@ Provide 3-5 prioritized recommendations with practical action steps. Return only
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Gap Recommendations Error]", error);
+    console.error("[AI Gap Recommendations Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate gap recommendations");
   }
 }

@@ -1,3 +1,5 @@
+import { readAuthJson, protectAuthRequest, authProtectionResponse, passwordSchema, emailSchema, inviteCodeSchema } from "@/lib/auth/request-protection";
+import { requireInvitationEmail, sendEmailVerification } from "@/lib/auth/account-emails";
 import { NextRequest } from "next/server";
 import { hash } from "bcryptjs";
 import { z } from "zod";
@@ -6,30 +8,31 @@ import { apiSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/respon
 
 // Schema for validating invite code only
 const validateCodeSchema = z.object({
-  inviteCode: z.string().min(1, "Invite code is required"),
+  inviteCode: inviteCodeSchema,
 });
 
 // Schema for joining with new account
 const joinSchema = z.object({
-  inviteCode: z.string().min(1, "Invite code is required"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  inviteCode: inviteCodeSchema,
+  email: emailSchema,
+  password: passwordSchema,
+  fullName: z.string().trim().min(2, "Name must be at least 2 characters").max(200),
 });
 
 // GET - Validate invite code and return org info
 export async function GET(request: NextRequest) {
   try {
+    await protectAuthRequest("invite-code", request.headers);
     const { searchParams } = new URL(request.url);
     const inviteCode = searchParams.get("code");
 
-    if (!inviteCode) {
+    if (!inviteCodeSchema.safeParse(inviteCode).success) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Invite code is required");
     }
 
     const organization = await prisma.organization.findFirst({
       where: {
-        inviteCode: inviteCode.toUpperCase(),
+        inviteCode: inviteCode!.toUpperCase(),
         inviteCodeEnabled: true,
       },
       select: {
@@ -59,7 +62,9 @@ export async function GET(request: NextRequest) {
       memberCount: organization._count.members,
     });
   } catch (error) {
-    console.error("[Validate Invite Code Error]", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Invite code validation failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to validate invite code");
   }
 }
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest) {
 // POST - Join organization with new account
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readAuthJson(request);
     const validation = joinSchema.safeParse(body);
 
     if (!validation.success) {
@@ -78,6 +83,8 @@ export async function POST(request: NextRequest) {
 
     const { inviteCode, email, password, fullName } = validation.data;
     const normalizedEmail = email.toLowerCase();
+    await protectAuthRequest("join", request.headers, normalizedEmail);
+    requireInvitationEmail();
     const normalizedCode = inviteCode.toUpperCase();
 
     // Find organization by invite code
@@ -127,6 +134,8 @@ export async function POST(request: NextRequest) {
         data: {
           email: normalizedEmail,
           passwordHash,
+          emailVerificationRequired: true,
+          emailVerified: false,
           fullName,
         },
       });
@@ -159,17 +168,24 @@ export async function POST(request: NextRequest) {
       return { user, membership };
     });
 
+    let verificationSent = true;
+    try { await sendEmailVerification(result.user); } catch { verificationSent = false; }
+
     return apiCreated(
       {
+        verificationRequired: true,
+        verificationSent,
         userId: result.user.id,
         memberId: result.membership.id,
         organizationId: organization.id,
         organizationName: organization.name,
       },
-      "Successfully joined organization"
+      "Account created. Verify your email before signing in."
     );
   } catch (error) {
-    console.error("[Join Organization Error]", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Account join failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to join organization");
   }
 }

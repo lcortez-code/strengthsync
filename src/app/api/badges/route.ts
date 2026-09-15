@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(data);
   } catch (error) {
-    console.error("Error fetching badges:", error);
+    console.error("Error fetching badges:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch badges");
   }
 }

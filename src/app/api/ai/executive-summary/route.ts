@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build team context
-    const teamContext = await buildTeamContext(organizationId);
+    const teamContext = await buildTeamContext(organizationId, { viewerMemberId: memberId, viewerRole: session.user.role });
 
     if (!teamContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Organization not found");
@@ -229,7 +229,7 @@ Generate an executive summary. Return only valid JSON.`;
     });
 
     if (!result.success) {
-      console.error("[AI Executive Summary] Generation failed:", result.error);
+      console.error("[AI Executive Summary] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate summary"
@@ -291,7 +291,7 @@ Generate an executive summary. Return only valid JSON.`;
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Executive Summary Error]", error);
+    console.error("[AI Executive Summary Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate executive summary");
   }
 }

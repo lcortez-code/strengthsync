@@ -67,38 +67,6 @@ export function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Avoiding confusing chars
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
-
 export function pluralize(count: number, singular: string, plural?: string): string {
   return count === 1 ? singular : plural || `${singular}s`;
-}
-
-export function generateTempPassword(): string {
-  const lowercase = "abcdefghjkmnpqrstuvwxyz";
-  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const numbers = "23456789";
-  const special = "!@#$%&*";
-
-  // Ensure at least one of each type
-  let password = "";
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += special[Math.floor(Math.random() * special.length)];
-
-  // Fill remaining with random chars from all
-  const allChars = lowercase + uppercase + numbers + special;
-  for (let i = 0; i < 8; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
-  }
-
-  // Shuffle the password
-  return password.split("").sort(() => Math.random() - 0.5).join("");
 }

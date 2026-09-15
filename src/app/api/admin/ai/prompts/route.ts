@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
+import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
 import { z } from "zod";
@@ -30,9 +31,8 @@ export async function GET(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const role = session.user.role;
-    if (role !== "OWNER" && role !== "ADMIN") {
-      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    if (!isPlatformAdmin(session.user.id)) {
+      return apiError(ApiErrorCode.FORBIDDEN, "Platform administrator access required");
     }
 
     const { searchParams } = new URL(request.url);
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(templates);
   } catch (error) {
-    console.error("[Admin AI Prompts GET Error]", error);
+    console.error("[Admin AI Prompts GET Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch prompt templates");
   }
 }
@@ -60,9 +60,8 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const role = session.user.role;
-    if (role !== "OWNER" && role !== "ADMIN") {
-      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    if (!isPlatformAdmin(session.user.id)) {
+      return apiError(ApiErrorCode.FORBIDDEN, "Platform administrator access required");
     }
 
     const body = await request.json();
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     return apiCreated(template);
   } catch (error) {
-    console.error("[Admin AI Prompts POST Error]", error);
+    console.error("[Admin AI Prompts POST Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create prompt template");
   }
 }
@@ -104,9 +103,8 @@ export async function PATCH(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const role = session.user.role;
-    if (role !== "OWNER" && role !== "ADMIN") {
-      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    if (!isPlatformAdmin(session.user.id)) {
+      return apiError(ApiErrorCode.FORBIDDEN, "Platform administrator access required");
     }
 
     const body = await request.json();
@@ -148,7 +146,7 @@ export async function PATCH(request: NextRequest) {
 
     return apiSuccess(template);
   } catch (error) {
-    console.error("[Admin AI Prompts PATCH Error]", error);
+    console.error("[Admin AI Prompts PATCH Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update prompt template");
   }
 }
@@ -161,9 +159,8 @@ export async function DELETE(request: NextRequest) {
       return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
     }
 
-    const role = session.user.role;
-    if (role !== "OWNER" && role !== "ADMIN") {
-      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    if (!isPlatformAdmin(session.user.id)) {
+      return apiError(ApiErrorCode.FORBIDDEN, "Platform administrator access required");
     }
 
     const { searchParams } = new URL(request.url);
@@ -189,7 +186,7 @@ export async function DELETE(request: NextRequest) {
 
     return apiSuccess({ deleted: true, id });
   } catch (error) {
-    console.error("[Admin AI Prompts DELETE Error]", error);
+    console.error("[Admin AI Prompts DELETE Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete prompt template");
   }
 }

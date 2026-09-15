@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiCreated, apiError, ApiErrorCode } from "@/lib/api/response";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { checkAndAwardBadges } from "@/lib/gamification/badge-engine";
 import { sendTeamsNotification, buildSkillRequestCard } from "@/lib/integrations/teams-webhook";
 
@@ -14,6 +15,11 @@ const responseSchema = z.object({
 const updateResponseSchema = z.object({
   status: z.enum(["ACCEPTED", "DECLINED"]),
 });
+
+async function lockResponsePair(tx: Prisma.TransactionClient, requestId: string, responderId: string) {
+  const key = `skill-response:${JSON.stringify([requestId, responderId])}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+}
 
 // POST - Create a response to a skill request
 export async function POST(
@@ -54,15 +60,6 @@ export async function POST(
       return apiError(ApiErrorCode.BAD_REQUEST, "You cannot respond to your own request");
     }
 
-    // Check if already responded
-    const existingResponse = await prisma.skillRequestResponse.findFirst({
-      where: { requestId, responderId: memberId },
-    });
-
-    if (existingResponse) {
-      return apiError(ApiErrorCode.CONFLICT, "You have already responded to this request");
-    }
-
     // Check if request is still open
     if (skillRequest.status !== "OPEN" && skillRequest.status !== "IN_PROGRESS") {
       return apiError(ApiErrorCode.BAD_REQUEST, "This request is no longer accepting responses");
@@ -79,35 +76,46 @@ export async function POST(
 
     const { message } = validation.data;
 
-    const response = await prisma.skillRequestResponse.create({
-      data: {
-        requestId,
-        responderId: memberId,
-        message,
-        status: "OFFERED",
-      },
-      include: {
-        responder: {
-          include: {
-            user: { select: { fullName: true } },
-          },
-        },
-      },
-    });
+    const result = await prisma.$transaction(async (tx) => {
+      await lockResponsePair(tx, requestId, memberId);
+      const existingResponse = await tx.skillRequestResponse.findFirst({
+        where: { requestId, responderId: memberId },
+        select: { id: true },
+      });
+      if (existingResponse) return { error: "duplicate" } as const;
 
-    // Update request status to IN_PROGRESS if it was OPEN
-    if (skillRequest.status === "OPEN") {
-      await prisma.skillRequest.update({
-        where: { id: requestId },
+      // This conditional write also serializes against request closure/acceptance.
+      const openRequest = await tx.skillRequest.updateMany({
+        where: {
+          id: requestId,
+          organizationId,
+          creatorId: { not: memberId },
+          status: { in: ["OPEN", "IN_PROGRESS"] },
+        },
         data: { status: "IN_PROGRESS" },
       });
-    }
+      if (openRequest.count !== 1) return { error: "closed" } as const;
 
-    // Award points to responder
-    await prisma.organizationMember.update({
-      where: { id: memberId },
-      data: { points: { increment: 15 } },
+      const response = await tx.skillRequestResponse.create({
+        data: { requestId, responderId: memberId, message, status: "OFFERED" },
+        include: {
+          responder: {
+            include: { user: { select: { fullName: true } } },
+          },
+        },
+      });
+      await tx.organizationMember.update({
+        where: { id: memberId },
+        data: { points: { increment: 15 } },
+      });
+      return { response } as const;
     });
+    if ("error" in result) {
+      return result.error === "duplicate"
+        ? apiError(ApiErrorCode.CONFLICT, "You have already responded to this request")
+        : apiError(ApiErrorCode.BAD_REQUEST, "This request is no longer accepting responses");
+    }
+    const { response } = result;
 
     // Create notification for request creator
     await prisma.notification.create({
@@ -145,7 +153,7 @@ export async function POST(
       createdAt: response.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error creating response:", error);
+    console.error("Error creating response:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create response");
   }
 }
@@ -215,24 +223,48 @@ export async function PATCH(
 
     const { status } = validation.data;
 
-    const updated = await prisma.skillRequestResponse.update({
-      where: { id: responseId },
-      data: { status },
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockResponsePair(tx, requestId, responseToUpdate.responderId);
+      if (status === "ACCEPTED") {
+        // Older data can contain duplicate rows for the same request and member.
+        const acceptedResponse = await tx.skillRequestResponse.findFirst({
+          where: {
+            requestId,
+            responderId: responseToUpdate.responderId,
+            status: { in: ["ACCEPTED", "COMPLETED"] },
+          },
+          select: { id: true },
+        });
+        if (acceptedResponse) return null;
+      }
+      const changed = await tx.skillRequestResponse.updateMany({
+        where: {
+          id: responseId,
+          requestId,
+          status: "OFFERED",
+          request: { organizationId, creatorId: memberId },
+        },
+        data: { status },
+      });
+      if (changed.count !== 1) return null;
+      if (status === "ACCEPTED") {
+        await tx.skillRequest.update({
+          where: { id: requestId },
+          data: { status: "FULFILLED" },
+        });
+        await tx.organizationMember.update({
+          where: { id: responseToUpdate.responderId },
+          data: { points: { increment: 25 } },
+        });
+      }
+      return { id: responseId, status };
     });
+    if (!updated) {
+      return apiError(ApiErrorCode.CONFLICT, "This response has already been reviewed");
+    }
 
     // If accepted, update request status and award more points
     if (status === "ACCEPTED") {
-      await prisma.skillRequest.update({
-        where: { id: requestId },
-        data: { status: "FULFILLED" },
-      });
-
-      // Award bonus points to responder for getting accepted
-      await prisma.organizationMember.update({
-        where: { id: responseToUpdate.responderId },
-        data: { points: { increment: 25 } },
-      });
-
       // Create notification for responder
       await prisma.notification.create({
         data: {
@@ -257,7 +289,7 @@ export async function PATCH(
       status: updated.status,
     });
   } catch (error) {
-    console.error("Error updating response:", error);
+    console.error("Error updating response:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update response");
   }
 }

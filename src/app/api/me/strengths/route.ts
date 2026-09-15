@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(response);
   } catch (error) {
-    console.error("[Get My Strengths Error]", error);
+    console.error("[Get My Strengths Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch strengths");
   }
 }

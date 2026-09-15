@@ -50,17 +50,17 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
     });
 
     if (error) {
-      console.error("[Email] Failed to send:", error);
-      return { success: false, error: error.message };
+      console.error("[Email] Delivery failed");
+      return { success: false, error: "Email delivery failed" };
     }
 
     console.log("[Email] Sent successfully:", data?.id);
     return { success: true, messageId: data?.id };
   } catch (err) {
-    console.error("[Email] Exception:", err);
+    console.error("[Email] Delivery failed");
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
+      error: "Email delivery failed",
     };
   }
 }
@@ -95,14 +95,14 @@ export async function sendBatchEmails(
       const { data, error } = await client.batch.send(batchPayload);
 
       if (error) {
-        console.error("[Email Batch] Error:", error);
+        console.error("[Email Batch] Delivery failed");
         results.failed += batch.length;
       } else {
         results.successful += data?.data?.length || 0;
         results.failed += batch.length - (data?.data?.length || 0);
       }
     } catch (err) {
-      console.error("[Email Batch] Exception:", err);
+      console.error("[Email Batch] Delivery failed");
       results.failed += batch.length;
     }
   }

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
+import { isPlatformAdmin } from "@/lib/auth/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { z } from "zod";
@@ -24,9 +25,8 @@ export async function PATCH(
     }
 
     // Check admin role
-    const isAdmin = session.user.role === "OWNER" || session.user.role === "ADMIN";
-    if (!isAdmin) {
-      return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
+    if (!isPlatformAdmin(session.user.id)) {
+      return apiError(ApiErrorCode.FORBIDDEN, "Platform administrator access required");
     }
 
     const { id } = await params;
@@ -63,7 +63,7 @@ export async function PATCH(
 
     return apiSuccess(updatedDomain);
   } catch (error) {
-    console.error("[Admin Constants Domain Update Error]", error);
+    console.error("[Admin Constants Domain Update Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update domain");
   }
 }

@@ -1,11 +1,12 @@
+import { protectAuthRequest, authProtectionResponse } from "@/lib/auth/request-protection";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
-import { hash } from "bcryptjs";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { parseCliftonStrengthsPDF, validateParsedReport } from "@/lib/pdf/parser";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
-import { generateTempPassword } from "@/lib/utils";
+import { requireInvitationEmail, sendMemberInvitation } from "@/lib/auth/account-emails";
+import { readUploadForm, MAX_DOCUMENT_BYTES, UploadLimitError } from "@/lib/api/upload";
 import {
   importRowSchema,
   type ImportRowResult,
@@ -31,7 +32,9 @@ export async function POST(request: NextRequest) {
       return apiError(ApiErrorCode.FORBIDDEN, "Admin access required");
     }
 
-    const formData = await request.formData();
+    await protectAuthRequest("bulk-member-create", request.headers, session.user.id);
+    requireInvitationEmail();
+    const formData = await readUploadForm(request, 50 * 1024 * 1024);
 
     // Parse member data from form
     const members: Array<{
@@ -60,6 +63,8 @@ export async function POST(request: NextRequest) {
       const jobTitle = (formData.get(`members[${index}].jobTitle`) as string) || "";
       const department = (formData.get(`members[${index}].department`) as string) || "";
       const pdf = formData.get(`members[${index}].pdf`) as File | null;
+
+      if (pdf && pdf.size > MAX_DOCUMENT_BYTES) return apiError(ApiErrorCode.BAD_REQUEST, "Each PDF must be 10 MB or smaller");
 
       members.push({
         email: email || "",
@@ -120,7 +125,10 @@ export async function POST(request: NextRequest) {
         // Check if user already exists in this organization
         const existingUser = await prisma.user.findUnique({
           where: { email: normalizedEmail },
-          include: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true, emailVerificationRequired: true, emailVerified: true,
             organizationMemberships: {
               where: { organizationId },
             },
@@ -137,31 +145,47 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Process this member in a transaction
-        const result = await prisma.$transaction(async (tx) => {
-          let userId: string;
-          let tempPassword: string | undefined;
-          let isNewUser = false;
-
-          if (existingUser) {
-            userId = existingUser.id;
-          } else {
-            // Create new user with temp password
-            tempPassword = generateTempPassword();
-            const passwordHash = await hash(tempPassword, 12);
-
-            const newUser = await tx.user.create({
-              data: {
-                email: normalizedEmail,
-                passwordHash,
-                fullName: member.fullName.trim(),
-                jobTitle: member.jobTitle.trim() || null,
-                department: member.department.trim() || null,
-              },
-            });
-            userId = newUser.id;
-            isNewUser = true;
+        if (existingUser) {
+          requireInvitationEmail();
+          const membership = await prisma.organizationMember.create({
+            data: { userId: existingUser.id, organizationId, role: "MEMBER", status: "PENDING" },
+            include: { organization: { select: { name: true } } },
+          });
+          let invitationSent = true;
+          try {
+            await sendMemberInvitation({ ...membership, user: existingUser });
+          } catch {
+            invitationSent = false;
+            console.error("Bulk invitation email could not be delivered");
           }
+          results.push({
+            rowIndex: i, email: normalizedEmail, success: true,
+            data: { memberId: membership.id, userId: existingUser.id, isNewUser: false,
+              status: "PENDING", invitationSent, strengthsImported: false,
+              message: invitationSent ? "Invitation sent. Import strengths after the recipient accepts." : "Invitation saved, but email delivery failed. Resend from the member list." },
+          });
+          continue;
+        }
+
+        // Decode optional documents before opening a database transaction.
+        let parsedPdf: Awaited<ReturnType<typeof parseCliftonStrengthsPDF>> | undefined;
+        if (member.pdf) {
+          try {
+            const parsed = await parseCliftonStrengthsPDF(Buffer.from(await member.pdf.arrayBuffer()));
+            if (validateParsedReport(parsed).valid && parsed.themes.length > 0) parsedPdf = parsed;
+          } catch {
+            console.error("Bulk import PDF could not be processed");
+          }
+        }
+
+        // Process this new member in a transaction
+        const result = await prisma.$transaction(async (tx) => {
+          const newUser = await tx.user.create({
+            data: { email: normalizedEmail, passwordHash: null, emailVerified: false, emailVerificationRequired: true, fullName: member.fullName.trim(),
+              jobTitle: member.jobTitle.trim() || null, department: member.department.trim() || null },
+          });
+          const userId = newUser.id;
+          const isNewUser = true;
 
           // Create membership
           const membership = await tx.organizationMember.create({
@@ -169,7 +193,7 @@ export async function POST(request: NextRequest) {
               userId,
               organizationId,
               role: "MEMBER",
-              status: "ACTIVE",
+              status: "PENDING",
             },
           });
 
@@ -177,86 +201,77 @@ export async function POST(request: NextRequest) {
           let themesFound = 0;
 
           // Process PDF if provided
-          if (member.pdf) {
-            try {
-              const arrayBuffer = await member.pdf.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
+          if (member.pdf && parsedPdf) {
+            const parsed = parsedPdf;
+            // Store document
+            const document = await tx.strengthsDocument.create({
+              data: {
+                uploadedById: session.user.id,
+                fileName: member.pdf.name,
+                fileSize: member.pdf.size,
+                mimeType: member.pdf.type,
+                processingStatus: "COMPLETED",
+                extractedData: JSON.parse(JSON.stringify(parsed)),
+              },
+            });
 
-              const parsed = await parseCliftonStrengthsPDF(buffer);
-              const validation = validateParsedReport(parsed);
+            // Create strengths
+            const strengthsData = parsed.themes
+              .filter((t) => themeMap.has(t.slug))
+              .map((theme) => ({
+                memberId: membership.id,
+                themeId: themeMap.get(theme.slug)!,
+                rank: theme.rank,
+                isTop5: theme.rank <= 5,
+                isTop10: theme.rank <= 10,
+                personalizedDescription: theme.personalizedDescription,
+              }));
 
-              if (validation.valid && parsed.themes.length > 0) {
-                // Store document
-                const document = await tx.strengthsDocument.create({
-                  data: {
-                    uploadedById: session.user.id,
-                    fileName: member.pdf.name,
-                    fileSize: member.pdf.size,
-                    mimeType: member.pdf.type,
-                    processingStatus: "COMPLETED",
-                    extractedData: JSON.parse(JSON.stringify(parsed)),
-                  },
-                });
+            if (strengthsData.length > 0) {
+              await tx.memberStrength.createMany({
+                data: strengthsData,
+              });
 
-                // Create strengths
-                const strengthsData = parsed.themes
-                  .filter((t) => themeMap.has(t.slug))
-                  .map((theme) => ({
-                    memberId: membership.id,
-                    themeId: themeMap.get(theme.slug)!,
-                    rank: theme.rank,
-                    isTop5: theme.rank <= 5,
-                    isTop10: theme.rank <= 10,
-                    personalizedDescription: theme.personalizedDescription,
-                  }));
+              // Update member with document reference
+              await tx.organizationMember.update({
+                where: { id: membership.id },
+                data: {
+                  strengthsImportedAt: new Date(),
+                  strengthsDocumentId: document.id,
+                },
+              });
 
-                if (strengthsData.length > 0) {
-                  await tx.memberStrength.createMany({
-                    data: strengthsData,
-                  });
-
-                  // Update member with document reference
-                  await tx.organizationMember.update({
-                    where: { id: membership.id },
-                    data: {
-                      strengthsImportedAt: new Date(),
-                      strengthsDocumentId: document.id,
-                    },
-                  });
-
-                  strengthsImported = true;
-                  themesFound = strengthsData.length;
-                }
-              }
-            } catch (pdfError) {
-              // Log PDF error but don't fail the member creation
-              console.error(`[Bulk Import] PDF parse error for ${normalizedEmail}:`, pdfError);
+              strengthsImported = true;
+              themesFound = strengthsData.length;
             }
           }
 
           return {
             memberId: membership.id,
             userId,
-            tempPassword,
+            user: newUser,
+            invitation: await tx.organizationMember.findUniqueOrThrow({ where: { id: membership.id }, include: { organization: { select: { name: true } } } }),
             isNewUser,
             strengthsImported,
             themesFound,
           };
         });
 
+        const { user, invitation, ...importResult } = result;
+        let invitationSent = true;
+        try { await sendMemberInvitation({ ...invitation, user }); } catch { invitationSent = false; }
         results.push({
-          rowIndex: i,
-          email: normalizedEmail,
-          success: true,
-          data: result,
+          rowIndex: i, email: normalizedEmail, success: true,
+          data: { ...importResult, status: "PENDING", invitationSent,
+            message: invitationSent ? "Invitation sent. The recipient must verify email and accept before joining." : "Invitation saved, but email delivery failed. Resend from the member list." },
         });
       } catch (error) {
-        console.error(`[Bulk Import] Error processing member ${normalizedEmail}:`, error);
+        console.error("Bulk member import failed");
         results.push({
           rowIndex: i,
           email: normalizedEmail,
           success: false,
-          error: error instanceof Error ? error.message : "Failed to process member",
+          error: "Failed to process member. Check the member list before retrying.",
         });
       }
     }
@@ -274,7 +289,10 @@ export async function POST(request: NextRequest) {
 
     return apiSuccess(response);
   } catch (error) {
-    console.error("[Bulk Import] Error:", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    if (error instanceof UploadLimitError) return apiError(ApiErrorCode.BAD_REQUEST, error.message);
+    console.error("Bulk import failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to process bulk import");
   }
 }

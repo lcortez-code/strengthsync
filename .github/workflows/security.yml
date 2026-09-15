@@ -1,0 +1,53 @@
+name: Local security regression checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: security_test
+          POSTGRES_PASSWORD: local_disposable_only
+          POSTGRES_DB: strengthsync_security
+        ports: ["55487:5432"]
+        options: >-
+          --health-cmd "pg_isready -U security_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://security_test:local_disposable_only@127.0.0.1:55487/strengthsync_security
+      NEXTAUTH_URL: http://127.0.0.1:3107
+      NEXTAUTH_SECRET: synthetic-isolated-ci-session-secret-20260915
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run test:security
+      - run: npm run security:secrets
+      - run: npm run test:security:app
+      - run: node --test --test-concurrency=1 scripts/security/ai-admission.integration.cjs scripts/security/auth-protection.integration.cjs scripts/security/digest-delivery.integration.cjs scripts/security/teams-linking.integration.cjs scripts/security/mentorship.integration.cjs scripts/security/challenges.integration.cjs scripts/security/skill-responses.integration.cjs scripts/security/chat-service.integration.cjs
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit --audit-level=moderate
+      - name: Actual local HTTP workflows
+        run: |
+          PORT=3107 HOSTNAME=127.0.0.1 node .next/standalone/server.js > /tmp/strengthsync-ci-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3107/auth/login > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/security/http-workflows.integration.cjs

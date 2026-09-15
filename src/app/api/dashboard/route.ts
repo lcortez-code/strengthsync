@@ -15,9 +15,11 @@ export async function GET(request: NextRequest) {
     const organizationId = session.user.organizationId;
     const memberId = session.user.memberId;
 
-    if (!organizationId) {
+    if (!organizationId || !memberId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "No organization associated with user");
     }
+
+    const shoutoutScope = { organizationId, OR: [{ isPublic: true }, { giverId: memberId }, { receiverId: memberId }] };
 
     // Get a week ago date
     const oneWeekAgo = new Date();
@@ -60,6 +62,7 @@ export async function GET(request: NextRequest) {
             select: { fullName: true, jobTitle: true },
           },
           strengths: {
+            where: { rank: { lte: 5 } },
             include: {
               theme: {
                 include: { domain: true },
@@ -72,9 +75,7 @@ export async function GET(request: NextRequest) {
 
       // Get recent shoutouts
       prisma.shoutout.findMany({
-        where: {
-          organizationId,
-        },
+        where: shoutoutScope,
         include: {
           giver: {
             include: { user: { select: { fullName: true } } },
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
       // Count shoutouts this week
       prisma.shoutout.count({
         where: {
-          organizationId,
+          ...shoutoutScope,
           createdAt: { gte: oneWeekAgo },
         },
       }),
@@ -212,7 +213,7 @@ export async function GET(request: NextRequest) {
       actionableSkillRequests: formattedSkillRequests,
     });
   } catch (error) {
-    console.error("Error fetching dashboard data:", error);
+    console.error("Error fetching dashboard data:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch dashboard data");
   }
 }

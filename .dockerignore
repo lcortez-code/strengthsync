@@ -10,10 +10,14 @@ build
 dist
 
 # Testing
+.beads
+.security
+.document-worker
 coverage
 
 # Environment files
-.env
+.env*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -50,4 +54,3 @@ history/
 
 # Local configuration and development state
 .*
-!.eslintrc.json

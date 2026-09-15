@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 
 // Complementary and friction patterns between themes
 const THEME_INTERACTIONS: Record<string, { complementary: string[]; friction: string[] }> = {
@@ -222,7 +223,7 @@ export async function GET(request: NextRequest) {
     }
 
     const organizationId = session.user.organizationId;
-    if (!organizationId) {
+    if (!organizationId || !session.user.memberId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -233,7 +234,7 @@ export async function GET(request: NextRequest) {
         include: {
           user: { select: { fullName: true, avatarUrl: true, jobTitle: true } },
           strengths: {
-            where: { rank: { lte: 10 } },
+            where: { rank: { lte: canViewFullProfile({ viewerRole: session.user.role, viewerMemberId: session.user.memberId, targetMemberId: member1Id }) ? 10 : 5 } },
             include: { theme: { include: { domain: true } } },
             orderBy: { rank: "asc" },
           },
@@ -244,7 +245,7 @@ export async function GET(request: NextRequest) {
         include: {
           user: { select: { fullName: true, avatarUrl: true, jobTitle: true } },
           strengths: {
-            where: { rank: { lte: 10 } },
+            where: { rank: { lte: canViewFullProfile({ viewerRole: session.user.role, viewerMemberId: session.user.memberId, targetMemberId: member2Id }) ? 10 : 5 } },
             include: { theme: { include: { domain: true } } },
             orderBy: { rank: "asc" },
           },
@@ -346,7 +347,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(guide);
   } catch (error) {
-    console.error("[Partnership Guide Error]", error);
+    console.error("[Partnership Guide Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate partnership guide");
   }
 }

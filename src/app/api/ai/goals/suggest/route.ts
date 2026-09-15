@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { targetMemberId, category, count, context } = validation.data;
 
     // Build context for the target member
-    const targetContext = await buildUserContext(targetMemberId);
+    const targetContext = await buildUserContext(targetMemberId, { organizationId, viewerMemberId: memberId, viewerRole: session.user.role });
 
     if (!targetContext) {
       return apiError(ApiErrorCode.NOT_FOUND, "Target member not found");
@@ -176,7 +176,7 @@ Dominant Domain: ${targetContext.dominantDomain || "Balanced"}
     });
 
     if (!result.success) {
-      console.error("[AI Goal Suggestions] Generation failed:", result.error);
+      console.error("[AI Goal Suggestions] Generation failed:");
       return apiError(
         ApiErrorCode.INTERNAL_ERROR,
         result.error || "Failed to generate goal suggestions"
@@ -197,7 +197,7 @@ Dominant Domain: ${targetContext.dominantDomain || "Balanced"}
       usage: result.usage,
     });
   } catch (error) {
-    console.error("[AI Goal Suggestions Error]", error);
+    console.error("[AI Goal Suggestions Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate goal suggestions");
   }
 }

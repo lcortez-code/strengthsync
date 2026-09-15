@@ -1,3 +1,4 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const page = boundedPageNumber(searchParams.get("page"), 1, 10000);
+    const limit = boundedPageNumber(searchParams.get("limit"), 20, 100);
     const filter = searchParams.get("filter"); // "given", "received", or null for all
 
     const memberId = session.user.memberId;
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: Record<string, unknown> = {
       organizationId,
-      isPublic: true,
+      OR: [{ isPublic: true }, ...(memberId ? [{ giverId: memberId }, { receiverId: memberId }] : [])],
     };
 
     if (filter === "given" && memberId) {
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching shoutouts:", error);
+    console.error("Error fetching shoutouts:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch shoutouts");
   }
 }
@@ -205,7 +206,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Create feed item
-    await prisma.feedItem.create({
+    if (shoutout.isPublic) await prisma.feedItem.create({
       data: {
         organizationId,
         creatorId: memberId,
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
     const receiverBadges = await checkAndAwardBadges(receiverId, "shoutout_received");
 
     // Teams webhook: fire-and-forget shoutout notification
-    sendTeamsNotification(
+    if (shoutout.isPublic) sendTeamsNotification(
       organizationId,
       buildShoutoutCard(
         shoutout.giver.user.fullName || "Someone",
@@ -270,7 +271,7 @@ export async function POST(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error("Error creating shoutout:", error);
+    console.error("Error creating shoutout:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create shoutout");
   }
 }

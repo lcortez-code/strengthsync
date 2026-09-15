@@ -1,3 +1,4 @@
+import { readUploadForm, UploadLimitError } from "@/lib/api/upload";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id;
 
     // Parse multipart form data
-    const formData = await request.formData();
+    const formData = await readUploadForm(request);
     const file = formData.get("avatar") as File | null;
 
     if (!file) {
@@ -59,8 +60,9 @@ export async function POST(request: NextRequest) {
       message: "Avatar uploaded successfully",
     });
   } catch (error) {
-    console.error("Avatar upload error:", error);
-    const message = error instanceof Error ? error.message : "Failed to upload avatar";
+    if (error instanceof UploadLimitError) return apiError(ApiErrorCode.BAD_REQUEST, error.message);
+    console.error("Avatar upload error:");
+    const message = "Failed to upload avatar";
     return apiError(ApiErrorCode.INTERNAL_ERROR, message);
   }
 }
@@ -93,7 +95,8 @@ export async function DELETE(request: NextRequest) {
 
     return apiSuccess({ message: "Avatar removed successfully" });
   } catch (error) {
-    console.error("Avatar delete error:", error);
+    if (error instanceof UploadLimitError) return apiError(ApiErrorCode.BAD_REQUEST, error.message);
+    console.error("Avatar delete error:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to remove avatar");
   }
 }

@@ -29,7 +29,7 @@ interface Member {
   avatarUrl: string | null;
   jobTitle: string | null;
   department: string | null;
-  points: number;
+  points?: number;
   topStrengths: {
     rank: number;
     themeName: string;
@@ -324,9 +324,11 @@ export default function DirectoryPage() {
 
                     {/* View profile link */}
                     <div className="mt-4 pt-3 border-t flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">
-                        {member.points} points
-                      </span>
+                      {member.points !== undefined && (
+                        <span className="text-xs text-muted-foreground">
+                          {member.points} points
+                        </span>
+                      )}
                       <span className="text-xs text-primary flex items-center gap-1">
                         View Profile
                         <ArrowRight className="h-3 w-3" />

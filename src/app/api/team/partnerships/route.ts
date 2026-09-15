@@ -1,7 +1,9 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { generatePartnershipSuggestions, type MemberStrengthData } from "@/lib/strengths/analytics";
 
@@ -18,7 +20,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const limit = boundedPageNumber(searchParams.get("limit"), 10, 100);
 
     // Get all members with their strengths
     const members = await prisma.organizationMember.findMany({
@@ -52,7 +54,13 @@ export async function GET(request: NextRequest) {
     const memberStrengths: MemberStrengthData[] = [];
 
     for (const member of members) {
+      const fullProfile = canViewFullProfile({
+        viewerRole: session.user.role,
+        viewerMemberId: session.user.memberId,
+        targetMemberId: member.id,
+      });
       for (const strength of member.strengths) {
+        if (!fullProfile && strength.rank > 5) continue;
         memberStrengths.push({
           memberId: member.id,
           memberName: member.user.fullName || member.user.jobTitle || "Unknown",
@@ -71,7 +79,7 @@ export async function GET(request: NextRequest) {
       totalPossiblePairings: (members.length * (members.length - 1)) / 2,
     });
   } catch (error) {
-    console.error("Error generating partnerships:", error);
+    console.error("Error generating partnerships:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to generate partnership suggestions");
   }
 }

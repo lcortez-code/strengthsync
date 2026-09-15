@@ -44,7 +44,7 @@ export async function GET() {
 
     return apiSuccess({ preferences });
   } catch (error) {
-    console.error("[Get Preferences Error]", error);
+    console.error("[Get Preferences Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch preferences");
   }
 }
@@ -99,7 +99,7 @@ export async function PATCH(request: NextRequest) {
       message: "Preferences updated successfully",
     });
   } catch (error) {
-    console.error("[Update Preferences Error]", error);
+    console.error("[Update Preferences Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to update preferences");
   }
 }

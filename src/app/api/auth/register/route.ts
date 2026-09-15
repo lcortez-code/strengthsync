@@ -1,20 +1,23 @@
+import { readAuthJson, protectAuthRequest, authProtectionResponse, passwordSchema, emailSchema, inviteCodeSchema } from "@/lib/auth/request-protection";
+import { requireInvitationEmail, sendEmailVerification } from "@/lib/auth/account-emails";
 import { NextRequest } from "next/server";
 import { hash } from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
-import { slugify, generateInviteCode } from "@/lib/utils";
+import { slugify } from "@/lib/utils";
+import { generateInviteCode } from "@/lib/auth/invite-code";
 
 const registerSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
-  organizationName: z.string().min(2, "Organization name must be at least 2 characters"),
+  email: emailSchema,
+  password: passwordSchema,
+  fullName: z.string().trim().min(2, "Name must be at least 2 characters").max(200),
+  organizationName: z.string().trim().min(2, "Organization name must be at least 2 characters").max(200),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readAuthJson(request);
     const validation = registerSchema.safeParse(body);
 
     if (!validation.success) {
@@ -25,6 +28,8 @@ export async function POST(request: NextRequest) {
 
     const { email, password, fullName, organizationName } = validation.data;
     const normalizedEmail = email.toLowerCase();
+    await protectAuthRequest("register", request.headers, normalizedEmail);
+    requireInvitationEmail();
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -45,6 +50,8 @@ export async function POST(request: NextRequest) {
         data: {
           email: normalizedEmail,
           passwordHash,
+          emailVerificationRequired: true,
+          emailVerified: false,
           fullName,
         },
       });
@@ -81,16 +88,23 @@ export async function POST(request: NextRequest) {
       return { user, organization, membership };
     });
 
+    let verificationSent = true;
+    try { await sendEmailVerification(result.user); } catch { verificationSent = false; }
+
     return apiCreated(
       {
+        verificationRequired: true,
+        verificationSent,
         userId: result.user.id,
         organizationId: result.organization.id,
         organizationSlug: result.organization.slug,
       },
-      "Account created successfully"
+      "Account created. Verify your email and set your password before signing in."
     );
   } catch (error) {
-    console.error("[Register Error]", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Account registration failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create account");
   }
 }

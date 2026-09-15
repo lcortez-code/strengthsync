@@ -17,7 +17,7 @@ export async function GET(
     }
 
     const organizationId = session.user.organizationId;
-    if (!organizationId) {
+    if (!organizationId || !session.user.memberId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "No organization associated with user");
     }
 
@@ -91,7 +91,11 @@ export async function GET(
     if (isFullProfile) {
       // Fetch shoutouts received
       const shoutouts = await prisma.shoutout.findMany({
-        where: { receiverId: memberId },
+        where: {
+          receiverId: memberId,
+          organizationId,
+          OR: [{ isPublic: true }, { giverId: session.user.memberId }, { receiverId: session.user.memberId }],
+        },
         include: {
           giver: {
             include: {
@@ -208,7 +212,7 @@ export async function GET(
 
     return apiSuccess(response);
   } catch (error) {
-    console.error("Error fetching member profile:", error);
+    console.error("Error fetching member profile:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch member profile");
   }
 }

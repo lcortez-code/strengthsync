@@ -111,3 +111,12 @@ services:
         sync: false
       - key: MICROSOFT_APP_TENANT_ID
         sync: false
+
+      # CONFIRM: required security controls added after the original inferred blueprint.
+      - key: STRENGTHSYNC_PLATFORM_ADMIN_USER_IDS
+        sync: false
+      - key: TEAMS_WEBHOOK_ORGANIZATION_ID
+        sync: false
+      # Leave unset unless the ingress overwrites this exact single-IP header.
+      - key: STRENGTHSYNC_TRUSTED_CLIENT_IP_HEADER
+        sync: false

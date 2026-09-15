@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
 
     return apiSuccess(response);
   } catch (error) {
-    console.error("[Admin AI Usage Error]", error);
+    console.error("[Admin AI Usage Error]");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch AI usage data");
   }
 }

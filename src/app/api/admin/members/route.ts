@@ -1,11 +1,12 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
+import { readAuthJson, protectAuthRequest, authProtectionResponse, emailSchema } from "@/lib/auth/request-protection";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
-import { hash } from "bcryptjs";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
-import { apiSuccess, apiListSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
-import { generateTempPassword } from "@/lib/utils";
+import { apiListSuccess, apiError, ApiErrorCode, apiCreated } from "@/lib/api/response";
+import { requireInvitationEmail, sendMemberInvitation } from "@/lib/auth/account-emails";
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,19 +30,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search");
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const page = boundedPageNumber(searchParams.get("page"), 1, 10000);
+    const limit = boundedPageNumber(searchParams.get("limit"), 20, 100);
 
     const where: Record<string, unknown> = { organizationId };
 
-    if (status) {
+    if (status && ["ACTIVE", "INACTIVE", "PENDING"].includes(status)) {
       where.status = status;
     }
 
     if (search) {
       where.user = {
         OR: [
-          { fullName: { contains: search, mode: "insensitive" } },
+          { fullName: { contains: search, mode: "insensitive" }, organizationMemberships: { some: { organizationId, status: { not: "PENDING" } } } },
           { email: { contains: search, mode: "insensitive" } },
         ],
       };
@@ -54,8 +55,8 @@ export async function GET(request: NextRequest) {
       include: {
         user: {
           select: {
-            id: true,
-            email: true,
+        id: true,
+        email: true,
             fullName: true,
             avatarUrl: true,
             jobTitle: true,
@@ -90,10 +91,10 @@ export async function GET(request: NextRequest) {
       id: m.id,
       userId: m.user.id,
       email: m.user.email,
-      name: m.user.fullName,
-      avatarUrl: m.user.avatarUrl,
-      jobTitle: m.user.jobTitle,
-      department: m.user.department,
+      name: m.status === "PENDING" ? "Invitation pending" : m.user.fullName,
+      avatarUrl: m.status === "PENDING" ? null : m.user.avatarUrl,
+      jobTitle: m.status === "PENDING" ? null : m.user.jobTitle,
+      department: m.status === "PENDING" ? null : m.user.department,
       role: m.role,
       status: m.status,
       points: m.points,
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       shoutoutsReceived: m._count.shoutoutsReceived,
       shoutoutsGiven: m._count.shoutoutsGiven,
       joinedAt: m.joinedAt.toISOString(),
-      lastLoginAt: m.user.lastLoginAt?.toISOString(),
+      lastLoginAt: m.status === "PENDING" ? null : m.user.lastLoginAt?.toISOString(),
     }));
 
     return apiListSuccess(data, {
@@ -116,16 +117,18 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching members:", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Member listing failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch members");
   }
 }
 
 const createMemberSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
-  jobTitle: z.string().optional(),
-  department: z.string().optional(),
+  email: z.string().trim().email("Invalid email address").max(254),
+  fullName: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
+  jobTitle: z.string().max(100).optional(),
+  department: z.string().max(100).optional(),
   role: z.enum(["MEMBER", "MANAGER", "ADMIN"]).default("MEMBER"),
 });
 
@@ -149,7 +152,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Only owners can create admins
-    const body = await request.json();
+    await protectAuthRequest("member-create", request.headers, session.user.id);
+    const body = await readAuthJson(request);
     const validation = createMemberSchema.safeParse(body);
 
     if (!validation.success) {
@@ -169,7 +173,10 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        fullName: true, emailVerificationRequired: true, emailVerified: true,
         organizationMemberships: {
           where: { organizationId },
         },
@@ -182,51 +189,35 @@ export async function POST(request: NextRequest) {
         return apiError(ApiErrorCode.CONFLICT, "This user is already a member of your organization");
       }
 
-      // Add existing user to organization
+      requireInvitationEmail();
       const membership = await prisma.organizationMember.create({
-        data: {
-          userId: existingUser.id,
-          organizationId,
-          role,
-          status: "ACTIVE",
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              avatarUrl: true,
-              jobTitle: true,
-              department: true,
-            },
-          },
-        },
+        data: { userId: existingUser.id, organizationId, role, status: "PENDING" },
+        include: { organization: { select: { name: true } } },
       });
-
-      console.log(`[Admin Members] Added existing user ${existingUser.email} to organization`);
-
+      let invitationSent = true;
+      try {
+        await sendMemberInvitation({ ...membership, user: existingUser });
+      } catch {
+        invitationSent = false;
+        console.error("Organization invitation email could not be delivered");
+      }
       return apiCreated({
-        id: membership.id,
-        userId: membership.user.id,
-        email: membership.user.email,
-        name: membership.user.fullName,
-        role: membership.role,
-        status: membership.status,
-        isNewUser: false,
+        id: membership.id, email: normalizedEmail, name: "Invitation pending",
+        role: membership.role, status: membership.status, isNewUser: false, invitationSent,
+        message: invitationSent ? "Invitation sent. The recipient must accept before joining." : "Invitation saved, but email delivery failed. Use Resend invitation from the member list.",
       });
     }
 
-    // Create new user with temp password
-    const tempPassword = generateTempPassword();
-    const passwordHash = await hash(tempPassword, 12);
+    requireInvitationEmail();
 
     const result = await prisma.$transaction(async (tx) => {
       // Create user
       const user = await tx.user.create({
         data: {
           email: normalizedEmail,
-          passwordHash,
+          passwordHash: null,
+          emailVerificationRequired: true,
+          emailVerified: false,
           fullName,
           jobTitle: jobTitle || null,
           department: department || null,
@@ -239,16 +230,19 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           organizationId,
           role,
-          status: "ACTIVE",
+          status: "PENDING",
         },
+        include: { organization: { select: { name: true } } },
       });
 
-      return { user, membership, tempPassword };
+      return { user, membership };
     });
 
-    console.log(`[Admin Members] Created new user ${normalizedEmail} with temp password`);
-
+    let invitationSent = true;
+    try { await sendMemberInvitation({ ...result.membership, user: result.user }); } catch { invitationSent = false; }
     return apiCreated({
+      invitationSent,
+      message: invitationSent ? "Invitation sent. The recipient chooses a password and accepts before joining." : "Invitation saved, but email delivery failed. Resend from the member list.",
       id: result.membership.id,
       userId: result.user.id,
       email: result.user.email,
@@ -256,10 +250,11 @@ export async function POST(request: NextRequest) {
       role: result.membership.role,
       status: result.membership.status,
       isNewUser: true,
-      tempPassword: result.tempPassword, // Return temp password so admin can share it
     });
   } catch (error) {
-    console.error("Error creating member:", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    console.error("Error creating member");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create member");
   }
 }

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiCreated, apiListSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { z } from "zod";
+import { publicFeedWhere } from "@/lib/social/feed";
 
 const commentSchema = z.object({
   content: z.string().min(1).max(1000),
@@ -29,7 +30,7 @@ export async function GET(
     }
 
     const feedItem = await prisma.feedItem.findFirst({
-      where: { id: feedItemId, organizationId },
+      where: { id: feedItemId, ...publicFeedWhere(organizationId) },
     });
 
     if (!feedItem) {
@@ -62,7 +63,7 @@ export async function GET(
 
     return apiSuccess(data);
   } catch (error) {
-    console.error("Error fetching comments:", error);
+    console.error("Error fetching comments:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch comments");
   }
 }
@@ -87,7 +88,7 @@ export async function POST(
     }
 
     const feedItem = await prisma.feedItem.findFirst({
-      where: { id: feedItemId, organizationId },
+      where: { id: feedItemId, ...publicFeedWhere(organizationId) },
     });
 
     if (!feedItem) {
@@ -149,7 +150,7 @@ export async function POST(
       createdAt: comment.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error creating comment:", error);
+    console.error("Error creating comment:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create comment");
   }
 }
@@ -168,8 +169,9 @@ export async function DELETE(
 
     const memberId = session.user.memberId;
     const role = session.user.role;
+    const organizationId = session.user.organizationId;
 
-    if (!memberId) {
+    if (!memberId || !organizationId) {
       return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     }
 
@@ -181,7 +183,7 @@ export async function DELETE(
     }
 
     const comment = await prisma.comment.findFirst({
-      where: { id: commentId, feedItemId },
+      where: { id: commentId, feedItemId, feedItem: publicFeedWhere(organizationId) },
     });
 
     if (!comment) {
@@ -193,11 +195,18 @@ export async function DELETE(
       return apiError(ApiErrorCode.FORBIDDEN, "Not authorized to delete this comment");
     }
 
-    await prisma.comment.delete({ where: { id: commentId } });
+    await prisma.comment.deleteMany({
+      where: {
+        id: commentId,
+        feedItemId,
+        feedItem: publicFeedWhere(organizationId),
+        ...(role === "OWNER" || role === "ADMIN" ? {} : { authorId: memberId }),
+      },
+    });
 
     return apiSuccess({ deleted: true });
   } catch (error) {
-    console.error("Error deleting comment:", error);
+    console.error("Error deleting comment:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to delete comment");
   }
 }

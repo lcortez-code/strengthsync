@@ -1,3 +1,4 @@
+import { boundedPageNumber } from "@/lib/api/pagination";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest) {
     const urgency = searchParams.get("urgency");
     const domain = searchParams.get("domain");
     const mine = searchParams.get("mine") === "true";
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const page = boundedPageNumber(searchParams.get("page"), 1, 10000);
+    const limit = boundedPageNumber(searchParams.get("limit"), 10, 100);
 
     const memberId = session.user.memberId;
 
@@ -130,7 +131,7 @@ export async function GET(request: NextRequest) {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error("Error fetching skill requests:", error);
+    console.error("Error fetching skill requests:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to fetch skill requests");
   }
 }
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
       createdAt: skillRequest.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("Error creating skill request:", error);
+    console.error("Error creating skill request:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to create skill request");
   }
 }

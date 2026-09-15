@@ -1,3 +1,4 @@
+import { parseChallengeRules, ChallengeRulesError } from "@/lib/challenges/rules";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -57,7 +58,7 @@ export async function POST(
     }
 
     // Generate initial progress based on challenge type
-    const initialProgress = generateInitialProgress(challenge.challengeType, challenge.rules as Record<string, unknown>);
+    const initialProgress = generateInitialProgress(challenge.challengeType, parseChallengeRules(challenge.challengeType, challenge.rules));
 
     // Create participant
     const participant = await prisma.challengeParticipant.create({
@@ -77,7 +78,8 @@ export async function POST(
       progress: participant.progress,
     });
   } catch (error) {
-    console.error("Error joining challenge:", error);
+    if (error instanceof ChallengeRulesError) return apiError(ApiErrorCode.VALIDATION_ERROR, error.message);
+    console.error("Error joining challenge:");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to join challenge");
   }
 }
@@ -85,7 +87,7 @@ export async function POST(
 function generateInitialProgress(type: string, rules: Record<string, unknown>): Record<string, unknown> {
   switch (type) {
     case "STRENGTHS_BINGO": {
-      const gridSize = (rules.gridSize as number) || 5;
+      const gridSize = rules.gridSize as number;
       // Generate a random bingo board with themes
       const shuffledThemes = [...THEMES].sort(() => Math.random() - 0.5);
       const board: { theme: string; domain: string; marked: boolean; markedBy?: string }[][] = [];

@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { canViewFullProfile } from "@/lib/auth/permissions";
+import type { AIProfileAccess } from "@/lib/ai/context/access";
 
 export interface DomainDistribution {
   name: string;
@@ -49,7 +51,11 @@ export interface TeamContext {
 }
 
 // Build context about a team/organization for AI prompts
-export async function buildTeamContext(organizationId: string): Promise<TeamContext | null> {
+export async function buildTeamContext(
+  organizationId: string,
+  viewer?: Pick<AIProfileAccess, "viewerMemberId" | "viewerRole">
+): Promise<TeamContext | null> {
+  const canViewTeamProfiles = viewer?.viewerRole === "OWNER" || viewer?.viewerRole === "ADMIN" || viewer?.viewerRole === "MANAGER";
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
     include: {
@@ -60,6 +66,9 @@ export async function buildTeamContext(organizationId: string): Promise<TeamCont
             select: { fullName: true, jobTitle: true },
           },
           strengths: {
+            where: canViewTeamProfiles ? undefined : {
+              OR: [{ rank: { lte: 5 } }, ...(viewer?.viewerMemberId ? [{ memberId: viewer.viewerMemberId }] : [])],
+            },
             include: {
               theme: {
                 include: {
@@ -99,7 +108,8 @@ export async function buildTeamContext(organizationId: string): Promise<TeamCont
     const topStrengths: string[] = [];
     const allStrengths: { name: string; rank: number; domain: string }[] = [];
 
-    for (const strength of member.strengths) {
+    const fullProfile = canViewFullProfile({ ...viewer, targetMemberId: member.id });
+    for (const strength of member.strengths.filter((s) => fullProfile || s.rank <= 5)) {
       const domainName = strength.theme.domain.name;
       const domainSlug = strength.theme.domain.slug;
       const themeName = strength.theme.name;

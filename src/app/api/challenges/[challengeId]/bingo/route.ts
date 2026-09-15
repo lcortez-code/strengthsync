@@ -5,220 +5,86 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, ApiErrorCode } from "@/lib/api/response";
 import { z } from "zod";
 import { checkAndAwardBadges } from "@/lib/gamification/badge-engine";
+import { canViewFullProfile } from "@/lib/auth/permissions";
+import { readAuthJson as readBoundedJson, authProtectionResponse } from "@/lib/auth/request-protection";
+import { parseBingoProgress, parseChallengeRules, ChallengeRulesError, type BingoSquare } from "@/lib/challenges/rules";
 
-const markSquareSchema = z.object({
-  row: z.number().min(0).max(4),
-  col: z.number().min(0).max(4),
-  memberId: z.string().min(1), // The member whose strength matches
-});
-
-interface BingoSquare {
-  theme: string;
-  domain: string;
-  marked: boolean;
-  markedBy?: string;
-  markedByName?: string;
+const markSquareSchema = z.object({ row: z.number().int().min(0).max(4), col: z.number().int().min(0).max(4), memberId: z.string().min(1).max(128) });
+class BingoError extends Error {
+  constructor(public readonly code: ApiErrorCode, message: string) { super(message); }
 }
 
-interface BingoProgress {
-  board: BingoSquare[][];
-  completedLines: string[];
-  hasWon: boolean;
-}
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ challengeId: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ challengeId: string }> }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
-    }
-
-    const organizationId = session.user.organizationId;
-    const myMemberId = session.user.memberId;
-
-    if (!organizationId || !myMemberId) {
-      return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
-    }
-
+    if (!session?.user?.id) return apiError(ApiErrorCode.UNAUTHORIZED, "Authentication required");
+    const organizationId = session.user.organizationId, myMemberId = session.user.memberId;
+    if (!organizationId || !myMemberId) return apiError(ApiErrorCode.BAD_REQUEST, "Organization membership required");
     const { challengeId } = await params;
-
-    const body = await request.json();
-    const validation = markSquareSchema.safeParse(body);
-
-    if (!validation.success) {
-      return apiError(ApiErrorCode.VALIDATION_ERROR, "Invalid input", {
-        errors: validation.error.flatten().fieldErrors,
-      });
-    }
-
+    const validation = markSquareSchema.safeParse(await readBoundedJson(request));
+    if (!validation.success) return apiError(ApiErrorCode.VALIDATION_ERROR, "Choose a valid bingo square and member");
     const { row, col, memberId } = validation.data;
+    if (memberId === myMemberId) return apiError(ApiErrorCode.BAD_REQUEST, "You must find another team member with this strength");
+    const challenge = await prisma.teamChallenge.findFirst({ where: { id: challengeId, organizationId, challengeType: "STRENGTHS_BINGO" } });
+    if (!challenge) return apiError(ApiErrorCode.NOT_FOUND, "Bingo challenge not found");
+    if (challenge.status !== "ACTIVE") return apiError(ApiErrorCode.BAD_REQUEST, "This challenge is not active");
+    const rules = parseChallengeRules(challenge.challengeType, challenge.rules);
+    const visibleRank = canViewFullProfile({ viewerRole: session.user.role, viewerMemberId: myMemberId, targetMemberId: memberId }) ? 10 : 5;
 
-    // Get challenge and participant
-    const challenge = await prisma.teamChallenge.findFirst({
-      where: {
-        id: challengeId,
-        organizationId,
-        challengeType: "STRENGTHS_BINGO",
-      },
-    });
-
-    if (!challenge) {
-      return apiError(ApiErrorCode.NOT_FOUND, "Bingo challenge not found");
-    }
-
-    if (challenge.status !== "ACTIVE") {
-      return apiError(ApiErrorCode.BAD_REQUEST, "This challenge is not active");
-    }
-
-    // Get participant
-    const participant = await prisma.challengeParticipant.findUnique({
-      where: {
-        challengeId_memberId: {
-          challengeId,
-          memberId: myMemberId,
-        },
-      },
-    });
-
-    if (!participant) {
-      return apiError(ApiErrorCode.NOT_FOUND, "You are not participating in this challenge");
-    }
-
-    const progress = participant.progress as unknown as BingoProgress;
-
-    // Check if square is already marked
-    if (progress.board[row][col].marked) {
-      return apiError(ApiErrorCode.CONFLICT, "This square is already marked");
-    }
-
-    // Verify the member has this strength
-    const squareTheme = progress.board[row][col].theme;
-    if (squareTheme === "FREE") {
-      return apiError(ApiErrorCode.BAD_REQUEST, "Cannot manually mark the free space");
-    }
-
-    const memberWithStrength = await prisma.organizationMember.findFirst({
-      where: {
-        id: memberId,
-        organizationId,
-        status: "ACTIVE",
-        strengths: {
-          some: {
-            theme: { name: squareTheme },
-            rank: { lte: 10 }, // Top 10 strengths
-          },
-        },
-      },
-      include: {
-        user: { select: { fullName: true } },
-      },
-    });
-
-    if (!memberWithStrength) {
-      return apiError(
-        ApiErrorCode.BAD_REQUEST,
-        `${squareTheme} is not in this member's top 10 strengths`
-      );
-    }
-
-    // Can't use yourself (unless no rule against it)
-    if (memberId === myMemberId) {
-      return apiError(ApiErrorCode.BAD_REQUEST, "You must find another team member with this strength");
-    }
-
-    // Mark the square
-    progress.board[row][col].marked = true;
-    progress.board[row][col].markedBy = memberId;
-    progress.board[row][col].markedByName = memberWithStrength.user.fullName || "Unknown";
-
-    // Check for completed lines
-    const newCompletedLines = checkForBingo(progress.board);
-    const previousLines = progress.completedLines.length;
-    progress.completedLines = newCompletedLines;
-
-    // Calculate score
-    const newScore = newCompletedLines.length * 10 + countMarkedSquares(progress.board);
-
-    // Check for win condition
-    const rules = challenge.rules as Record<string, unknown>;
-    const winCondition = (rules.winCondition as string) || "row_or_column";
-
-    let hasWon = false;
-    if (winCondition === "row_or_column" && newCompletedLines.length > 0) {
-      hasWon = true;
-    } else if (winCondition === "full_board" && countMarkedSquares(progress.board) === 25) {
-      hasWon = true;
-    }
-
-    progress.hasWon = hasWon;
-
-    // Update participant
-    await prisma.challengeParticipant.update({
-      where: { id: participant.id },
-      data: {
-        progress: JSON.parse(JSON.stringify(progress)),
-        score: newScore,
-        completedAt: hasWon ? new Date() : null,
-      },
-    });
-
-    // Award points if won for the first time
-    if (hasWon && !participant.completedAt) {
-      await prisma.organizationMember.update({
-        where: { id: myMemberId },
-        data: { points: { increment: 50 } },
+    const result = await prisma.$transaction(async tx => {
+      // Serialize each board so distinct concurrent squares cannot overwrite progress.
+      await tx.$queryRaw`SELECT id FROM challenge_participants WHERE "challengeId" = ${challengeId} AND "memberId" = ${myMemberId} FOR UPDATE`;
+      const participant = await tx.challengeParticipant.findUnique({ where: { challengeId_memberId: { challengeId, memberId: myMemberId } } });
+      if (!participant) throw new BingoError(ApiErrorCode.NOT_FOUND, "You are not participating in this challenge");
+      const progress = parseBingoProgress(participant.progress);
+      const square = progress.board[row][col];
+      if (square.marked) throw new BingoError(ApiErrorCode.CONFLICT, "This square is already marked");
+      if (square.theme === "FREE") throw new BingoError(ApiErrorCode.BAD_REQUEST, "Cannot manually mark the free space");
+      const memberWithStrength = await tx.organizationMember.findFirst({
+        where: { id: memberId, organizationId, status: "ACTIVE", strengths: { some: { theme: { name: square.theme }, rank: { lte: visibleRank } } } },
+        select: { user: { select: { fullName: true } } },
       });
-
-      // Badge engine: check for challenge-completed badges
-      await checkAndAwardBadges(myMemberId, "challenge_completed");
-    }
-
-    return apiSuccess({
-      marked: true,
-      square: progress.board[row][col],
-      completedLines: progress.completedLines,
-      newLines: newCompletedLines.length - previousLines,
-      hasWon,
-      score: newScore,
+      if (!memberWithStrength) throw new BingoError(ApiErrorCode.BAD_REQUEST, "This member does not have a matching strength available to you");
+      square.marked = true; square.markedBy = memberId; square.markedByName = memberWithStrength.user.fullName;
+      const previousLines = progress.completedLines.length;
+      progress.completedLines = checkForBingo(progress.board);
+      const marked = countMarkedSquares(progress.board);
+      const matchedWin = rules.winCondition === "full_board" ? marked === 25
+        : rules.winCondition === "diagonal" ? progress.completedLines.some(line => line.startsWith("diag-"))
+        : progress.completedLines.some(line => line.startsWith("row-") || line.startsWith("col-"));
+      progress.hasWon = Boolean(participant.completedAt) || matchedWin;
+      const score = progress.completedLines.length * 10 + marked;
+      await tx.challengeParticipant.update({ where: { id: participant.id }, data: { progress: JSON.parse(JSON.stringify(progress)), score } });
+      let firstCompletion = false;
+      if (progress.hasWon) {
+        const completed = await tx.challengeParticipant.updateMany({ where: { id: participant.id, completedAt: null }, data: { completedAt: new Date() } });
+        firstCompletion = completed.count === 1;
+        if (firstCompletion) await tx.organizationMember.update({ where: { id: myMemberId }, data: { points: { increment: 50 } } });
+      }
+      return { marked: true, square, completedLines: progress.completedLines, newLines: progress.completedLines.length - previousLines, hasWon: progress.hasWon, score, firstCompletion };
     });
+    if (result.firstCompletion) {
+      try { await checkAndAwardBadges(myMemberId, "challenge_completed"); }
+      catch { console.error("Challenge completion badge check failed"); }
+    }
+    const { firstCompletion: _firstCompletion, ...response } = result;
+    return apiSuccess(response);
   } catch (error) {
-    console.error("Error marking bingo square:", error);
+    const protection = authProtectionResponse(error);
+    if (protection) return protection;
+    if (error instanceof BingoError) return apiError(error.code, error.message);
+    if (error instanceof ChallengeRulesError) return apiError(ApiErrorCode.VALIDATION_ERROR, error.message);
+    console.error("Bingo square update failed");
     return apiError(ApiErrorCode.INTERNAL_ERROR, "Failed to mark square");
   }
 }
 
 function checkForBingo(board: BingoSquare[][]): string[] {
-  const completedLines: string[] = [];
-  const size = board.length;
-
-  // Check rows
-  for (let i = 0; i < size; i++) {
-    if (board[i].every((cell) => cell.marked)) {
-      completedLines.push(`row-${i}`);
-    }
-  }
-
-  // Check columns
-  for (let j = 0; j < size; j++) {
-    if (board.every((row) => row[j].marked)) {
-      completedLines.push(`col-${j}`);
-    }
-  }
-
-  // Check diagonals
-  if (board.every((row, i) => row[i].marked)) {
-    completedLines.push("diag-main");
-  }
-  if (board.every((row, i) => row[size - 1 - i].marked)) {
-    completedLines.push("diag-anti");
-  }
-
-  return completedLines;
+  const lines: string[] = [], size = board.length;
+  for (let i = 0; i < size; i++) if (board[i].every(cell => cell.marked)) lines.push(`row-${i}`);
+  for (let j = 0; j < size; j++) if (board.every(row => row[j].marked)) lines.push(`col-${j}`);
+  if (board.every((row, i) => row[i].marked)) lines.push("diag-main");
+  if (board.every((row, i) => row[size - 1 - i].marked)) lines.push("diag-anti");
+  return lines;
 }
-
-function countMarkedSquares(board: BingoSquare[][]): number {
-  return board.flat().filter((cell) => cell.marked).length;
-}
+function countMarkedSquares(board: BingoSquare[][]): number { return board.flat().filter(cell => cell.marked).length; }

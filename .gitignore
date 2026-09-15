@@ -30,7 +30,6 @@ yarn-error.log*
 !/.beads/
 !/.dockerignore
 !/.env.example
-!/.eslintrc.json
 !/.gitattributes
 !/.githooks/
 !/.github/
@@ -75,3 +74,6 @@ public/uploads
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Generated isolated document parser
+/.document-worker/

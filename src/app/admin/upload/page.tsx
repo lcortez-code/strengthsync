@@ -88,7 +88,6 @@ export default function UploadPage() {
   // Form for assigning to user
   const [assignMode, setAssignMode] = useState<"select" | "manual">("select");
   const [assignEmail, setAssignEmail] = useState("");
-  const [assignName, setAssignName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Check admin access
@@ -205,9 +204,6 @@ export default function UploadPage() {
         formData.append("forUserName", selectedMember.name);
       } else if (assignMode === "manual" && assignEmail) {
         formData.append("forUserEmail", assignEmail);
-        if (assignName) {
-          formData.append("forUserName", assignName);
-        }
       }
 
       const response = await fetch("/api/strengths/upload", {
@@ -244,7 +240,6 @@ export default function UploadPage() {
     setError(null);
     setErrorDetails(null);
     setAssignEmail("");
-    setAssignName("");
     setPreviewThemes([]);
     setSelectedMember(null);
     setMemberSearch("");
@@ -392,7 +387,7 @@ export default function UploadPage() {
               <CardHeader>
                 <CardTitle className="text-lg">Assign to Team Member</CardTitle>
                 <CardDescription>
-                  Link this report to a team member (optional)
+                  Select an active team member. Add or invite new people from Members first; existing accounts must accept their invitation before you upload their strengths.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -405,7 +400,6 @@ export default function UploadPage() {
                     onClick={() => {
                       setAssignMode("select");
                       setAssignEmail("");
-                      setAssignName("");
                     }}
                   >
                     <User className="h-4 w-4 mr-2" />
@@ -422,7 +416,7 @@ export default function UploadPage() {
                     }}
                   >
                     <UserPlus className="h-4 w-4 mr-2" />
-                    New Member
+                    Find by Email
                   </Button>
                 </div>
 
@@ -499,7 +493,6 @@ export default function UploadPage() {
                                     onClick={() => {
                                       setAssignMode("manual");
                                       setAssignEmail(memberSearch.includes("@") ? memberSearch : "");
-                                      setAssignName(memberSearch.includes("@") ? "" : memberSearch);
                                       setShowMemberDropdown(false);
                                     }}
                                   >
@@ -565,16 +558,7 @@ export default function UploadPage() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Full Name</label>
-                      <Input
-                        type="text"
-                        placeholder="Jane Smith"
-                        value={assignName}
-                        onChange={(e) => setAssignName(e.target.value)}
-                        icon={<User className="h-4 w-4" />}
-                      />
-                    </div>
+
                   </>
                 )}
               </CardContent>

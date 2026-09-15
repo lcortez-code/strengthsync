@@ -10,11 +10,13 @@ export interface TokenUsage {
 }
 
 export interface UsageLogInput {
+  reservationId: string;
   memberId?: string;
   organizationId: string;
   feature: string;
   endpoint: string;
   usage: TokenUsage;
+  usageKnown: boolean;
   requestSummary?: string;
   responseSummary?: string;
   success?: boolean;
@@ -23,13 +25,26 @@ export interface UsageLogInput {
 
 // Log AI usage to database
 export async function logUsage(input: UsageLogInput): Promise<string> {
+  if (!input.reservationId || !input.memberId) throw new Error("AI usage requires an admitted request");
+  const reservation = await prisma.aIUsageLog.findFirst({
+    where: { id: input.reservationId, memberId: input.memberId, organizationId: input.organizationId },
+    select: { id: true, reservedTokens: true, settledAt: true },
+  });
+  if (!reservation) throw new Error("AI request reservation not found");
+  if (reservation.settledAt) return reservation.id;
+  if (reservation.reservedTokens < 1) throw new Error("AI usage requires an admitted request");
+
+  for (const count of [input.usage.promptTokens, input.usage.completionTokens, input.usage.totalTokens]) {
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error("Invalid AI usage count");
+  }
   const costCents = calculateCost(
     input.usage.model,
     input.usage.promptTokens,
     input.usage.completionTokens
   );
 
-  const log = await prisma.aIUsageLog.create({
+  const settled = await prisma.aIUsageLog.updateMany({
+    where: { id: reservation.id, memberId: input.memberId, organizationId: input.organizationId, settledAt: null },
     data: {
       memberId: input.memberId,
       organizationId: input.organizationId,
@@ -38,21 +53,27 @@ export async function logUsage(input: UsageLogInput): Promise<string> {
       promptTokens: input.usage.promptTokens,
       completionTokens: input.usage.completionTokens,
       totalTokens: input.usage.totalTokens,
+      // Incomplete requests or missing usage can still incur provider charges.
+      // Keep its remaining allowance until the daily window passes.
+      reservedTokens: input.success === false || input.usageKnown !== true ? Math.max(0, reservation.reservedTokens - input.usage.totalTokens) : 0,
+      settledAt: new Date(),
       costCents: Math.round(costCents * 100), // Store as integer cents
       model: input.usage.model,
       latencyMs: input.usage.latencyMs,
-      requestSummary: input.requestSummary?.substring(0, 1000), // Truncate for storage
-      responseSummary: input.responseSummary?.substring(0, 1000),
+      // Usage accounting never stores prompts, completions, or provider error payloads.
+      requestSummary: null,
+      responseSummary: null,
       success: input.success ?? true,
-      errorMessage: input.errorMessage,
+      errorMessage: input.success === false ? "generation_failed" : null,
     },
   });
+  if (settled.count === 0) return reservation.id;
 
   console.log(
     `[AI Usage] Feature: ${input.feature}, Tokens: ${input.usage.totalTokens}, Cost: $${(costCents / 100).toFixed(4)}`
   );
 
-  return log.id;
+  return reservation.id;
 }
 
 // Get usage summary for a member
@@ -238,7 +259,7 @@ export async function getRecentErrors(
     memberId: string | null;
   }>
 > {
-  return prisma.aIUsageLog.findMany({
+  const errors = await prisma.aIUsageLog.findMany({
     where: {
       organizationId,
       success: false,
@@ -246,13 +267,14 @@ export async function getRecentErrors(
     select: {
       id: true,
       feature: true,
-      errorMessage: true,
+      errorMessage: false,
       createdAt: true,
       memberId: true,
     },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
+  return errors.map((error) => ({ ...error, errorMessage: "generation_failed" }));
 }
 
 // Calculate estimated monthly cost based on current usage

@@ -28,6 +28,7 @@ interface CardData {
   jobTitle: string | null;
   department: string | null;
   bio: string | null;
+  isFullProfile: boolean;
   primaryDomain: {
     slug: string;
     name: string;
@@ -53,14 +54,14 @@ interface CardData {
     mentorshipsAsMentee: number;
     points: number;
     streak: number;
-  };
+  } | null;
   badges: {
     name: string;
     iconUrl: string;
     tier: string;
     earnedAt: string;
   }[];
-  joinedAt: string;
+  joinedAt: string | null;
 }
 
 function getInitials(name: string): string {
@@ -244,7 +245,7 @@ export default function StrengthsCardPage({
                       {getInitials(cardData.name)}
                     </AvatarFallback>
                   </Avatar>
-                  {cardData.stats.streak > 0 && (
+                  {(cardData.stats?.streak ?? 0) > 0 && (
                     <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1">
                       <Flame className="h-4 w-4" />
                     </div>
@@ -265,13 +266,13 @@ export default function StrengthsCardPage({
                 <h3 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-2">
                   Top 5 Strengths
                 </h3>
-                {cardData.topStrengths.map((strength, i) => (
+                {cardData.topStrengths.map((strength) => (
                   <div
                     key={strength.name}
                     className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5"
                   >
                     <span className="text-sm font-bold opacity-60 w-4">
-                      {i + 1}
+                      {strength.rank}
                     </span>
                     <DomainIcon
                       domain={strength.domain as DomainSlug}
@@ -284,6 +285,7 @@ export default function StrengthsCardPage({
               </div>
 
               {/* Stats Bar */}
+              {cardData.stats && (
               <div className="flex items-center justify-around pt-4 border-t border-white/20 mt-4">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1">
@@ -307,6 +309,7 @@ export default function StrengthsCardPage({
                   <span className="text-[10px] opacity-60">Badges</span>
                 </div>
               </div>
+              )}
             </div>
           </div>
 
@@ -318,7 +321,7 @@ export default function StrengthsCardPage({
             )}
           >
             <div className="h-full flex flex-col p-6">
-              <h3 className="text-lg font-bold mb-4 text-center text-foreground">All 34 Strengths</h3>
+              <h3 className="text-lg font-bold mb-4 text-center text-foreground">{cardData.isFullProfile ? "All Strengths" : "Top 5 Strengths"}</h3>
               <div className="flex-1 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-1 text-xs">
                   {cardData.allStrengths.map((strength) => (
@@ -356,7 +359,7 @@ export default function StrengthsCardPage({
 
           {/* Domain Distribution */}
           <div className="space-y-3">
-            <h3 className="font-semibold">Domain Distribution (Top 10)</h3>
+            <h3 className="font-semibold">Domain Distribution (Top {cardData.isFullProfile ? 10 : 5})</h3>
             <div className="space-y-2">
               {Object.entries(cardData.domainDistribution)
                 .sort((a, b) => b[1] - a[1])
@@ -369,7 +372,7 @@ export default function StrengthsCardPage({
                           "h-2 rounded-full bg-gradient-to-r",
                           DOMAIN_GRADIENTS[domain] || DOMAIN_GRADIENTS.strategic
                         )}
-                        style={{ width: `${(count / 10) * 100}%` }}
+                        style={{ width: `${(count / (cardData.isFullProfile ? 10 : 5)) * 100}%` }}
                       />
                     </div>
                     <span className="text-sm font-medium">{count}</span>
@@ -412,13 +415,13 @@ export default function StrengthsCardPage({
             <Button asChild className="flex-1">
               <Link href={`/team/${memberId}`}>
                 <Users className="h-4 w-4 mr-2" />
-                View Full Profile
+                View Profile
               </Link>
             </Button>
           </div>
 
           <p className="text-xs text-center text-muted-foreground">
-            Click the card to flip it and see all 34 strengths
+            Click the card to flip it and see {cardData.isFullProfile ? "all available strengths" : "the top 5 strengths"}
           </p>
         </div>
       </div>
