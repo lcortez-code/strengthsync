@@ -109,7 +109,7 @@ DATABASE_URL='<external connection string>' \
   npx prisma migrate resolve --applied 20260905055913_init
 ```
 
-Do not put that value in `.env`, `local database-tool configuration`, or any shell profile. This is the
+Do not put that value in local environment files, development-tool configuration, or any shell profile. This is the
 one deliberate exception to the loopback guard in
 `scripts/assert-local-database.mjs`; every `npm run db:*` script still refuses a
 non-loopback host, and that is intentional.

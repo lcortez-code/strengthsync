@@ -10,9 +10,9 @@ Remove the Render PostgreSQL connection URL from persistent local development fi
 
 ## Context
 
-- GitGuardian detected a live Render PostgreSQL URL committed in `local development-tool configuration`.
+- GitGuardian detected a live Render PostgreSQL URL committed in local development-tool configuration.
 - The exposed database user has been revoked and replaced.
-- Render and the currently ignored `.env` and `local database-tool configuration` use the replacement user.
+- At the time of this design, Render and ignored local development configuration used the replacement user.
 - `docker-compose.yml` already defines PostgreSQL, but it mixes local database, application, and migration services and exposes PostgreSQL on every local interface.
 - `prisma/seed.ts` writes only reference domains, themes, and badges. It does not copy or synthesize production organizations, users, or activity.
 - The README references a missing `.env.example` and legacy `docker-compose` commands.
@@ -23,11 +23,11 @@ Remove the Render PostgreSQL connection URL from persistent local development fi
 ## Decisions
 
 1. Use Docker PostgreSQL with the Next.js application running directly on the host.
-2. Use only loopback database hosts for local application, Prisma, and database tools workflows.
+2. Use only loopback database hosts for local application, Prisma, and development-tool workflows.
 3. Seed only real reference data: domains, themes, and badges.
 4. Create development organizations and users through the application UI and API, not through fictional seed records.
 5. Use authenticated `render psql` for production diagnostics.
-6. Do not store, inject, or reconstruct the Render production database URL in local application or database tools workflows.
+6. Do not store, inject, or reconstruct the Render production database URL in local application or development-tool workflows.
 7. Add a fail-closed local database guard to every schema-changing or destructive database command.
 8. Add repository-specific PostgreSQL credential detection and a pre-commit hook.
 9. Do not change the Render external IP allowlist until a trusted stable CIDR is supplied. The current `0.0.0.0/0` rule is a separately gated production operation because guessing a CIDR can lock out authorized diagnostics.
@@ -59,7 +59,7 @@ Remove the Render PostgreSQL connection URL from persistent local development fi
 
 PostgreSQL runs as the only service in `docker-compose.yml`. Its port is published on `127.0.0.1`, its storage uses a named development volume, and its credentials are disposable local defaults. The service health check uses the configured local user and database.
 
-Next.js continues to run on the host with `npm run dev`. Prisma and the local PostgreSQL database tools server read a loopback URL from ignored local configuration. No local process receives a Render PostgreSQL URL.
+Next.js continues to run on the host with `npm run dev`. Prisma and local database tools read a loopback URL from ignored local configuration. No local process receives a Render PostgreSQL URL.
 
 ### Production data plane
 
@@ -68,7 +68,7 @@ Deployed Render services continue to use Render's internal PostgreSQL connection
 ### Data flow
 
 ```text
-Host Next.js / Prisma / local database tools -> 127.0.0.1 -> Docker PostgreSQL
+Host Next.js / Prisma / database tools -> 127.0.0.1 -> Docker PostgreSQL
 Render services -> Render private network -> Render PostgreSQL
 Developer terminal -> Render CLI authentication -> interactive production psql
 ```
@@ -120,7 +120,7 @@ No command silently falls back from local PostgreSQL to Render PostgreSQL.
 
 A tracked `.env.example` will provide safe local configuration, including a loopback PostgreSQL URL with disposable credentials. The ignored `.env` will be updated in place so its database URL matches the local Docker database while preserving unrelated developer-specific values.
 
-A tracked `database-tool example configuration` will configure the PostgreSQL database tools server for the same loopback database. The ignored `local database-tool configuration` will be rewritten to match it. Neither file will contain a Render hostname.
+Any local database-tool configuration must use the same loopback database and remain untracked. It must not contain a Render hostname.
 
 ### PostgreSQL credential detector
 
@@ -198,11 +198,10 @@ This phase delivers loopback Docker PostgreSQL, the tested guard, and guarded lo
 ### Phase 2: Local configuration and documentation
 
 - `.env` (ignored local file)
-- `local database-tool configuration` (ignored local file)
-- `database-tool example configuration`
+- Ignored local database-tool configuration
 - `README.md`
 
-This phase removes the Render URL from persistent local application and database tools configuration and documents the approved workflows.
+This phase removes the Render URL from persistent local application and development-tool configuration and documents the approved workflows.
 
 ### Phase 3: Credential detection and commit protection
 
@@ -221,7 +220,7 @@ No planned source files. This phase runs the complete quality, Docker integratio
 ## Acceptance criteria
 
 - Persistent local files contain no Render PostgreSQL URL.
-- Local Next.js, Prisma, and database tools workflows use only loopback Docker PostgreSQL.
+- Local Next.js, Prisma, and development-tool workflows use only loopback Docker PostgreSQL.
 - Reference seeding creates no organization or user records.
 - Destructive local commands cannot operate on a non-loopback host.
 - Production diagnostics work through authenticated `render psql` without a local production URL.

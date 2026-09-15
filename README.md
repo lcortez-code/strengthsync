@@ -45,7 +45,7 @@ cd strengthsync
 cp .env.example .env
 ```
 
-Local `.env` and `local database-tool configuration` files must never contain a Render PostgreSQL URL. The local database is PostgreSQL in Docker, published only on `127.0.0.1`; its Docker volume is disposable.
+Local environment and development-tool configuration must never contain a Render PostgreSQL URL. The local database is PostgreSQL in Docker, published only on `127.0.0.1`; its Docker volume is disposable.
 
 3. Install dependencies, start and initialize PostgreSQL, then start the app:
 
@@ -94,13 +94,15 @@ render login
 npm run db:prod:console
 ```
 
-`render psql` through `npm run db:prod:console` is the only supported local path to the production database. Do not copy a production DSN into application, Prisma, database tools, or shell configuration.
+`render psql` through `npm run db:prod:console` is the only supported local path to the production database. Do not copy a production DSN into application, Prisma, development-tool, or shell configuration.
 
 This path depends on the database's `ipAllowList` containing your IP. Once that
 list is emptied, `npm run db:prod:console` stops working and a Render Shell on
 the web service becomes the way to reach the database.
 
 ## Development
+
+See the [development guide](docs/development.md) for architecture and implementation conventions.
 
 ```bash
 npm run dev            # Start dev server with Turbopack
